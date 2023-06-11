@@ -1,0 +1,93 @@
+var mongoose = require('mongoose');
+const fs = require("fs");
+var config = require("../Config/config");
+if (config.caPath != '') {
+  const certFileBuf = fs.readFileSync(__dirname + config.caPath);
+  mongoose.connect(config.dbconnection, { useNewUrlParser: true, useCreateIndex: true, useFindAndModify: false, useUnifiedTopology: true, sslCA: certFileBuf }).then(() => console.log(config.dbName + " Mongo DB Connected")).catch((err) => console.error(err));
+} else {
+  mongoose.connect(config.dbconnection, { useNewUrlParser: true, useCreateIndex: true, useFindAndModify: false, useUnifiedTopology: true }).then(() => console.log(config.dbName + " Mongo DB Connected")).catch((err) => console.error(err));
+}
+mongoose.connection.on('connected', function () {
+  require('../cron/cron.USDTPerpetual').initialCall();
+  console.log('Mongoose default connection open');
+});
+mongoose.connection.on('error', function (err) {
+  console.log('Mongoose default connection error: ' + err);
+});
+mongoose.connection.on('disconnected', function () {
+  console.log('Mongoose default connection disconnected');
+});
+process.on('SIGINT', function () {
+  mongoose.connection.close(function () {
+    console.log('Mongoose default connection disconnected through app termination');
+    process.exit(0);
+  });
+});
+require('./Admin');
+require('./AdminBank');
+require('./EmailTemplate');
+require('./SiteSettings');
+require('./Currency');
+require('./CurrencySymbol');
+require('./Docs');
+require('./CMS');
+require('./AdminAddress');
+require('./Profit');
+require('./ProfitFutures');
+require('./Users');
+require('./UserWallet');
+require('./CoinAddress');
+require('./Pairs');
+require('./DerivativesPairs');
+require('./OrderBook');
+require('./OrderBookFutures');
+require('./Transactions');
+require('./BalanceUpdation');
+require('./StakeBalanceUpdation');
+require('./AdminActivity');
+require('./UserActivity');
+require('./VerifyUsers');
+require('./TradeChart');
+require('./MappingOrders');
+require('./MappingOrdersFutures');
+require('./TradeOrders');
+require('./ReferralCommission');
+require('./Staking');
+require('./StakingHistory');
+require('./StakeBonusHistory');
+require('./SubAdminActivityLog');
+require('./Notification');
+require('./AdminTransactions');
+require('./P2PPayment');
+require('./P2PPair');
+require('./P2POrder');
+require('./P2PTransactions');
+require('./P2PAppealHistory');
+require('./P2PFeedBack');
+require('./P2PReport');
+require('./P2PAllPayments');
+require('./P2PSettings');
+require('./P2PFaq');
+require('./StakingEnabledUser');
+require('./ManualBalance');
+require('./P2pBalanceUpdation');
+require('./USDMBalanceUpdation');
+require('./P2PActivityLog');
+require('./Voucher');
+require('./USDTPerpetualPair');
+require('./USDTPerpetualPosition');
+require('./USDTPerpetualOrder');
+require('./USDTPerpetualTrade');
+require('./USDTPerpetualProfitLoss');
+require('./TradeChartUSDTPerpetual');
+require('./Competion');
+require('./TradingCompetitionBalanceUpdation');
+require('./BorrowMarket.model');
+require('./loan-config.model');
+require('./collateral-config.model');
+require('./CryptoLoanBorrow.model');
+require('./CryptoLoanBalanceUpdation.model');
+require('./LanchPad-form.model');
+require('./CryptoLoanActivityLogs.model');
+require('./LeadTrader');
+require('./CopyTraderRequest');
