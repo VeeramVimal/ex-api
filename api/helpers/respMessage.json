@@ -1,0 +1,7 @@
+{
+    "LONG_TAKE_PROFIT": "Please enter correct take profit price",
+    "LONG_STOP_LOSS": "Please enter correct stop loss price",
+    "SHORT_TAKE_PROFIT": "Please enter correct take profit price",
+    "SHORT_STOP_LOSS": "Please enter correct stop loss price",
+    "SOMETHING_WRONG": "Something went wrong, try again."
+}
