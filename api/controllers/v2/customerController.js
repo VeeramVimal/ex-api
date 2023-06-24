@@ -63,7 +63,7 @@ const customerController = {
                                 }
                             }
                             else {
-                                let tempMsgContent = "Dear customer, ###OTP### is OTP for your account password reset request initiated through Fibit Platform";
+                                let tempMsgContent = "Dear customer, ###OTP### is OTP for your account password reset request initiated through "+config.siteName+" Platform";
                                 tempMsgContent = tempMsgContent
                                     .replace(/###OTP###/g, random);
                                 await common.mobileSMS(findUserResult.phoneno, tempMsgContent);
@@ -77,7 +77,7 @@ const customerController = {
                     }
                 } else {
                     if(userUningEmailOrPhno === 'email') {
-                        res.json({ status: false, message: "The email doesn't exists. Please check if your number is correct" });
+                        res.json({ status: false, message: "The email doesn't exists. Please check if your email is correct" });
                     }
                     else {
                         res.json({ status: false, message: "The phone number doesn't exists. Please check if your number is correct" });

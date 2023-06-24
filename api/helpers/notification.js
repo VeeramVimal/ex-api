@@ -22,7 +22,23 @@ exports.sendNotification = async function () {
     }
 }
 
-// mapNotification.prototype._sendNotification = async function () {
+exports.getUserId = async function(userId) {  
+    try {
+        // console.log('userId==help==>',userId)
+        const findQ = { notificationType: "admin", $or: [
+            { userList: { $size: 0 } }, // userList is empty
+            { userList: { $not: { $elemMatch: { usersId: userId } } } } // userList does not contain the specified user ID
+          ] }
+        const notification = await query_helper.findData(Notification, findQ, 0, { _id: -1 });
+        // console.log("notification ref--->",notification);
+        return notification;
+        // 
+    } catch (err) {
+        console.log("notification err", err);
+    }
+}
+
+// mapNotification.prototype._send  Notification = async function () {
 //     try {
 //         const 
 //     } catch (err) {

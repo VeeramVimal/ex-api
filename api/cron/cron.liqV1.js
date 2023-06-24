@@ -7,7 +7,7 @@ const cron = require("node-cron");
 
 let config = require("../Config/config");
 
-const customerWalletController = require("../controllers/customerWalletController");
+const customerWalletController = require("../controllers/v1/customerWalletController");
 
 let pairsDB = mongoose.model("Pairs");
 const DerivativesPairDB = mongoose.model("DerivativesPairs");

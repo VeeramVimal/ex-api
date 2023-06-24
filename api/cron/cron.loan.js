@@ -236,7 +236,8 @@ const liquidePriceCheck = async () => {
 											} else {
 												USD_Value = await coingecko(coinQuery);
 											};
-											var CurrentUSD = USD_Value[coinQuery.ids][coinQuery.vs_currencies];
+
+											var CurrentUSD = USD_Value && USD_Value[coinQuery.ids][coinQuery.vs_currencies];
 											if (CurrentUSD) {
 												if (liqudateLTVCalc >= CurrentUSD) {
 													await autoCloseAsset(cryptoLoan)

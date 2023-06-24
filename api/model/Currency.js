@@ -30,5 +30,6 @@ var currencySchema = new Schema({
   "perpetualTransferEnable": { type: Number, default: 0 },
   "stakingTransferEnable": { type: Number, default: 0 },
   "minCurDeposit": { type: Number, default: 0 },
+  "minWalletTransfer": { type: Number, default: 0 },
 });
 module.exports = mongoose.model('Currency', currencySchema, 'Currency');

@@ -10,7 +10,7 @@ var notificationSchema = new Schema({
 	"type": { type: String },
 	"notificationType": { type: String },
 	"link": { type: String },
-	"userList": [{ usersId: { type: mongoose.Schema.Types.ObjectId } }, { status: { type: Number, default: 1 } }],
+	"userList": [{ usersId: { type: mongoose.Schema.Types.ObjectId, unique:true },"status": { type: Number, default: '1' } }],
 	"createdDate": { type: Date, default: Date.now }
 });
 module.exports = mongoose.model('Notification', notificationSchema, 'Notification')

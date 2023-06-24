@@ -14,7 +14,9 @@ var usdtPerpetualSchema = new Schema({
     "highPrice24h": { type: Number, default: 1 },
     "lowPrice24h": { type: Number, default: 1 },
     
+    "minLeverage": { type: Number, default: 1 },
     "maxLeverage": { type: Number, default: 1 },
+
     "takerFee": { type: Number, default: 0 },
     "decimalValue": { type: Number, default: 8 },
     "priceDecimal": { type: Number, default: 8 },

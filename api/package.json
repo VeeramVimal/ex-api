@@ -3,15 +3,14 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "TZ='UTC+05:30' pm2 start ecosystem.config.js",
-    "local": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=local",
-    "staging": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=staging",
-    "prod": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=production",
-    "build": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=production"
+    "start": "TZ='UTC+05:30' pm2 start ecosystem.config.js --node-args='--max-old-space-size=8192'",
+    "local": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=local --node-args='--max-old-space-size=8192'",
+    "staging": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=staging --node-args='--max-old-space-size=8192'",
+    "prod": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=production --node-args='--max-old-space-size=8192'",
+    "build": "TZ='UTC+05:30' pm2 start ecosystem.config.js --env=production --node-args='--max-old-space-size=8192'"
   },
   "dependencies": {
     "async": "^3.2.4",
-    "aws-sdk": "^2.930.0",
     "base64-to-image": "^1.0.2",
     "bcrypt": "^5.1.0",
     "bcryptjs": "^2.4.3",
@@ -31,7 +30,6 @@
     "http-errors": "~1.6.3",
     "https": "^1.0.0",
     "ipinfo": "^1.5.1",
-    "json-2-csv": "^3.17.0",
     "jsonwebtoken": "^8.5.1",
     "keythereum": "^1.0.4",
     "mongoose": "^5.12.14",
@@ -51,7 +49,6 @@
     "pm2": "^5.2.2",
     "pug": "2.0.0-beta11",
     "randomstring": "^1.2.3",
-    "react-datepicker": "^4.8.0",
     "ripple-lib": "^1.10.0",
     "shelljs": "^0.8.4",
     "socket.io": "2.3.0",
@@ -60,7 +57,6 @@
     "tronweb": "^3.2.7",
     "twilio": "^3.80.1",
     "uniqid": "^5.3.0",
-    "use-file-upload": "^1.0.11",
     "uuid": "^3.4.0",
     "web3": "1.5.2",
     "ws": "^8.5.0"

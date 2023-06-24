@@ -31,8 +31,8 @@ module.exports = {
 			.replace(/###SUPPORT###/g, configAdmin.supportEmail)
 			.replace(/###COPYRIGHT###/g, configAdmin.copyRights)
 			.replace(/###DATE###/g, setDate)
-			.replace(/###TERMSURL###/g, config.frontEnd + 'assets/terms_condition.pdf')
-			.replace(/###PRIVACY###/g, config.frontEnd + 'assets/privacy_policy.pdf');
+			.replace(/###TERMSURL###/g, config.frontEnd + 'terms')
+			.replace(/###PRIVACY###/g, config.frontEnd + 'privacy-policy');
 
 		values.html = mailHTMLNew
 			.replace(/###MAINCONTENT###/g, values.html)

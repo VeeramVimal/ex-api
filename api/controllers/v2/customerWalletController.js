@@ -1,21 +1,8 @@
 const mongoose = require('mongoose');
 let speakeasy = require('speakeasy');
 
-const emailTemplate = mongoose.model("EmailTemplate");
-const Users = mongoose.model("Users");
 const UserWallet = mongoose.model("UserWallet");
-const CoinAddress = mongoose.model("CoinAddress");
-const VerifyUsers = mongoose.model("VerifyUsers");
 const Currency = mongoose.model("Currency");
-const CurrencySymbol = mongoose.model("CurrencySymbol");
-const Transactions = mongoose.model("Transactions");
-const siteSettings = mongoose.model("SiteSettings");
-const Staking = mongoose.model("Staking");
-const StakingHistory = mongoose.model("StakingHistory");
-const stakeEnableList = mongoose.model("StakingEnabledUser");
-const profit = mongoose.model("Profit");
-let StakeBonusHistory = mongoose.model('StakeBonusHistory');
-let StakeBalanceUpdation = mongoose.model('StakeBalanceUpdation');
 
 const query_helper = require('../../helpers/query');
 let common = require('../../helpers/common');

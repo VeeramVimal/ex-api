@@ -347,21 +347,21 @@ async function recentTrade(passData = {}, responseData) {
     console.log("bybit : rt err : ", err)
   }
 
-    // let tradeDocs = []
-    // for (let item of bybitData) {
-    //   tradeDocs.push({
-    //     'time': new Date(item.timestamp),
-    //     'type': item.side == 'Buy' ? 'buy' : 'sell',
-    //     'price': item.price,
-    //     'volume': item.size,
-    //   })
-    // }
-    // tradeDocs = [...tradeDocs, ...preData]
-    // recentTrade[symbol] = tradeDocs
-    // socket.sockets.emit('USDTPerpetualRecentTrade', {
-    //   'pairName': symbol,
-    //   'data': tradeDocs
-    // });
+  // let tradeDocs = []
+  // for (let item of bybitData) {
+  //   tradeDocs.push({
+  //     'time': new Date(item.timestamp),
+  //     'type': item.side == 'Buy' ? 'buy' : 'sell',
+  //     'price': item.price,
+  //     'volume': item.size,
+  //   })
+  // }
+  // tradeDocs = [...tradeDocs, ...preData]
+  // recentTrade[symbol] = tradeDocs
+  // socket.sockets.emit('USDTPerpetualRecentTrade', {
+  //   'pairName': symbol,
+  //   'data': tradeDocs
+  // });
 }
 
 if (config.cronStatus != "Disable") {

@@ -56,7 +56,7 @@ const cmsController = {
                     status: 1,
                     identify: "CMS"
                 }
-            } else if (identify == "terms" || identify == "about" || identify == "privacy" || identify == "contactus") {
+            } else if (identify == "adBanner" || identify == "terms" || identify == "about" || identify == "privacy" || identify == "contactus") {
                 find = {
                     status: 1,
                     identify: identify

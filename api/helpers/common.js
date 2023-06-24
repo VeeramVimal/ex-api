@@ -10,6 +10,8 @@ var WAValidator = require("multicoin-address-validator");
 const ipInfo = require("ipinfo");
 var axios = require('axios');
 let plivo = require('plivo');
+const fs = require('fs');
+const path = require('path');
 
 const UserWallet = mongoose.model("UserWallet");
 const BalanceUpdation = mongoose.model("BalanceUpdation");
@@ -135,6 +137,130 @@ exports.decrypt = (value) => {
   dec += decipher.final("utf8");
   return dec;
 };
+exports.cronCheck = async function (data={}, callback) {
+  var file = path.join(__dirname, '../public/settings/settings.json');
+  return fs.readFile(file, function (err, data) {
+    if(err) {
+      callback({status: false});
+    }
+    const datas = JSON.parse(data);
+    if(datas && datas.cron) {
+      if(datas.cron == "enable") {
+        callback({status: true});
+      }
+      else {
+        callback({status: false});
+      }
+    }
+    else {
+      callback({status: false});
+    }
+  });
+};
+exports.middlewareApi = async function (request, res, next) {
+  var file = path.join(__dirname, '../public/settings/settings.json');
+  fs.readFile(file, function (err, data) {
+    if(err) {
+      return res.json({status: false, message: 'Something went wrong'});
+    }
+    const datas = JSON.parse(data);
+    if(datas && datas.app) {
+      if(datas.app.api == "enable" && datas.deploy == "no") {
+        next()
+      }
+      else if(datas.app.api == "disable" && datas.app.message != "") {
+        return res.json({status: false, message: datas.app.message });
+      }
+      else if(datas.deploy == "yes" && datas.message != "") {
+        return res.json({status: false, message: datas.message });
+      }
+      else {
+        return res.json({status: false, message: 'Something went wrong' });
+      }
+    }
+    else {
+      return res.json({status: false, message: 'Something went wrong' });
+    }
+  });
+}
+exports.middlewareAppApi = async function (request, res, next) {
+  var file = path.join(__dirname, '../public/settings/settings.json');
+  fs.readFile(file, function (err, data) {
+    if(err) {
+      return res.json({status: false, message: 'Something went wrong'});
+    }
+    const datas = JSON.parse(data);
+    if(datas && datas.app) {
+      if(datas.app.api == "enable" && datas.deploy == "no") {
+        next()
+      }
+      else if(datas.app.api == "disable" && datas.app.message != "") {
+        return res.json({status: false, message: datas.app.message });
+      }
+      else if(datas.deploy == "yes" && datas.message != "") {
+        return res.json({status: false, message: datas.message });
+      }
+      else {
+        return res.json({status: false, message: 'Something went wrong' });
+      }
+    }
+    else {
+      return res.json({status: false, message: 'Something went wrong' });
+    }
+  });
+}
+exports.middlewareAdmapi = async function (request, res, next) {
+  var file = path.join(__dirname, '../public/settings/settings.json');
+  fs.readFile(file, function (err, data) {
+    if(err) {
+      return res.json({status: false, message: 'Something went wrong'});
+    }
+    const datas = JSON.parse(data);
+    if(datas && datas.adm) {
+      if(datas.adm.api == "enable" && datas.deploy == "no") {
+        next()
+      }
+      else if(datas.adm.api == "disable" && datas.adm.message != "") {
+        return res.json({status: false, message: datas.adm.message });
+      }
+      else if(datas.deploy == "yes" && datas.message != "") {
+        return res.json({status: false, message: datas.message });
+      }
+      else {
+        return res.json({status: false, message: 'Something went wrong' });
+      }
+    }
+    else {
+      return res.json({status: false, message: 'Something went wrong' });
+    }
+  });
+}
+exports.middlewareWebapi = async function (request, res, next) {
+  var file = path.join(__dirname, '../public/settings/settings.json');
+  fs.readFile(file, function (err, data) {
+    if(err) {
+      return res.json({status: false, message: 'Something went wrong'});
+    }
+    const datas = JSON.parse(data);
+    if(datas && datas.web) {
+      if(datas.web.api == "enable" && datas.deploy == "no") {
+        next()
+      }
+      else if(datas.web.api == "disable" && datas.web.message != "") {
+        return res.json({status: false, message: datas.web.message });
+      }
+      else if(datas.deploy == "yes" && datas.message != "") {
+        return res.json({status: false, message: datas.message });
+      }
+      else {
+        return res.json({status: false, message: 'Something went wrong' });
+      }
+    }
+    else {
+      return res.json({status: false, message: 'Something went wrong' });
+    }
+  });
+}
 exports.createPayloadAdmin = (key) => {
   let payload = { subject: key };
   let token = jwt.sign(payload, jwtTokenAdmin);

@@ -3,8 +3,8 @@ module.exports = {
     ALREADY_USER: "User is already register",
     NEW_REFERRAL: "Referral account is created successful!",
     USER_NOT_FOUND : "User is not found",
-    ALREADY_LANCHPAD_REJECT: "This user Lanchpad token is already rejected",
-    ALREADY_LANCHPAD_APPROVE: "This user Lanchpad token is already approved",
+    ALREADY_LAUNCHPAD_REJECT: "This user Launchpad token is already rejected",
+    ALREADY_LAUNCHPAD_APPROVE: "This user Launchpad token is already approved",
     USER_UPDATE_SCCESSFULL: "User updated successful!",
     COIN_CREATE_SUCCESSFULL: "Coin created successful!",
     ALREADY_COIN: "Coin is already created",
@@ -20,5 +20,6 @@ module.exports = {
     CRYPTO_LOAN_UPDATED: "Crypto loan updated successful!",
     CRYPTO_LOAN_NOT_FOUND: "Crypto loan is not found",
     REPAYMENT_SUCCESS: "Crypto loan repaid successful!",
-    ALREADY_LOAN_ACCURED: "Already You borrow loan accruing repaid"
+    ALREADY_LOAN_ACCURED: "Already You borrow loan accruing repaid",
+    SET_TIME_INTERVAL: "Please wait for 5 seconds before placing another request!",
 }

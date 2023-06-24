@@ -1,6 +1,7 @@
 const messageUtils = require("../helpers/messageUtils");
 const CollateralConfig = require("../model/collateral-config.model");
-
+const LoanConfig = require("../model/loan-config.model");
+const BorrowMarket = require("../model/BorrowMarket.model");
 /**
  * @description create a new collateral config 
  * @param {Object} collateralBody
@@ -17,7 +18,7 @@ const createCollateralServices = async (collateralBody) => {
         throw new Error(messageUtils.ALREADY_COIN)
     }
     const collateral = await CollateralConfig.create(collateralBody);
-    return { data: collateral, message: messageUtils.COLLATERAL_CONFIG_CREATE};
+    return { data: collateral, message: messageUtils.COLLATERAL_CONFIG_CREATE };
 };
 
 /**
@@ -62,7 +63,7 @@ const getCollateralCoinServices = async () => {
 * @param {ObjectId<string} collateralCoinId
 * @returns {Promise<User>}
 */
-const getSingleCollateralCoinServices = async(collateralCoinId) => {
+const getSingleCollateralCoinServices = async (collateralCoinId) => {
     const collateralData = await CollateralConfig.findById({ _id: collateralCoinId }, { __v: 0, createdAt: 0, updatedAt: 0 });
     return collateralData;
 };
@@ -75,10 +76,10 @@ const getSingleCollateralCoinServices = async(collateralCoinId) => {
  */
 const updateCollateralCoinServices = async (collateralCoinId, updateCollateralBody) => {
     const collateralData = await getSingleCollateralCoinServices(collateralCoinId);
-    if(!collateralData) throw new Error(messageUtils.COLLATERAL_NOT_FOUND);
+    if (!collateralData) throw new Error(messageUtils.COLLATERAL_NOT_FOUND);
     Object.assign(collateralData, updateCollateralBody);
     await collateralData.save().then(async (collateral) => {
-        if(collateral.coin == 'BTC'){
+        if (collateral.coin == 'BTC') {
             const coin = collateral.coin;
             const collateralCoin = await CollateralConfig.findOne({ coin: { $regex: coin, $options: 'i' } });
             if (collateralCoin) {
@@ -90,15 +91,18 @@ const updateCollateralCoinServices = async (collateralCoinId, updateCollateralBo
                         await BorrowMarket.findOne({ coin: { $regex: loanCoin, $options: 'i' } })
                             .then(async (borrow_config) => {
                                 if (borrow_config) {
-                                    sevenInt =collateralCoin.sevenDaysFixedInterest;
+                                    sevenInt = collateralCoin.sevenDaysFixedInterest;
                                     fourteenInt = collateralCoin.fourteenDaysFixedInterest;
                                     thirtyInt = collateralCoin.thirtyDaysFixedInterest;
                                     sevenIntHr = sevenInt / (365 * 24);
                                     fourteenIntHr = fourteenInt / (365 * 24);
                                     thirtyIntHr = thirtyInt / (365 * 24);
-                                    sevenInterest = sevenIntHr * 24 * 7;
-                                    fourteenInterest = fourteenIntHr * 24 * 14;
-                                    thirtyInterest = thirtyIntHr * 24 * 30;
+                                    // sevenInterest = sevenIntHr * 24 * 7;
+                                    // fourteenInterest = fourteenIntHr * 24 * 14;
+                                    // thirtyInterest = thirtyIntHr * 24 * 30;
+                                    sevenInterest = sevenInt;
+                                    fourteenInterest = fourteenInt;
+                                    thirtyInterest = thirtyInt;
                                     borrow_config.sevenDaysFixedRate.annuallyRate = parseFloat(sevenInterest).toFixed(8);
                                     borrow_config.sevenDaysFixedRate.hourlyRate = parseFloat(sevenIntHr).toFixed(8);
                                     borrow_config.fourteenDaysFixedRate.annuallyRate = parseFloat(fourteenInterest).toFixed(8);
@@ -107,6 +111,7 @@ const updateCollateralCoinServices = async (collateralCoinId, updateCollateralBo
                                     borrow_config.thirtyDaysFixedRate.hourlyRate = parseFloat(thirtyIntHr).toFixed(8);
                                     Object.assign(borrow_config);
                                     await borrow_config.save();
+
                                 }
                             })
                             .catch((err) => err);
@@ -115,8 +120,8 @@ const updateCollateralCoinServices = async (collateralCoinId, updateCollateralBo
             }
         }
     })
-    .catch((err) => console.log(err))
-    return { data: collateralData, message: messageUtils.COLLATERAL_UPDATE_SUCCESS};
+        .catch((err) => console.log(err))
+    return { data: collateralData, message: messageUtils.COLLATERAL_UPDATE_SUCCESS };
 };
 
 module.exports = {

@@ -139,21 +139,50 @@ exports.createOrder = async function (reqBody) {
           return true;
         }
         else {
+
+          let respType = reqBody.action == 'open' ? "createResponseUSDTPerpetual" : "createRespUSDTPerpetualPosClose";          
+
+          let pairDoc = await pairsDB.findOne(
+            { "pair": reqBody.pair, 'status': "active" }
+          )
+          .populate('fromCurrency')
+          .populate('toCurrency');
+
+          if (!pairDoc) {
+            return _tradeMap._createResponseUSDTPerpetual({
+              "status": false,
+              "message": "Invalid pair",
+              "userId": reqBody.userId
+            }, respType);
+          }
+
+          reqBody.price = parseFloat(reqBody.price);
+          reqBody.amount = parseFloat(reqBody.amount);
+          reqBody.leverage = parseFloat(reqBody.leverage);
+
+          if(reqBody.leverage < pairDoc.minLeverage || reqBody.leverage > pairDoc.maxLeverage) {
+            return _tradeMap._createResponseUSDTPerpetual({
+              "status": false,
+              "message": "Please choose correct leverage value.",
+              "userId": reqBody.userId
+            });
+          }
+
           if (reqBody.orderType == 'limit') {
             if (reqBody.action == 'open') {
-              return _tradeMap._limitOrderOpenPosition(reqBody)
+              return _tradeMap._limitOrderOpenPosition(reqBody, pairDoc);
             } else if (reqBody.action == 'close') {
-              return _tradeMap._limitOrderClosePosition(reqBody)
+              return _tradeMap._limitOrderClosePosition(reqBody, pairDoc);
             }
           } else if (reqBody.orderType == 'market') {
             if (reqBody.action == 'open') {
-              return _tradeMap._marketOrderOpenPosition(reqBody)
+              return _tradeMap._marketOrderOpenPosition(reqBody, pairDoc);
             } else if (reqBody.action == 'close') {
-              return _tradeMap._marketOrderClosePosition(reqBody)
+              return _tradeMap._marketOrderClosePosition(reqBody, pairDoc);
             }
           } else if (reqBody.orderType == 'stopLimit') {
             if (reqBody.action == 'open') {
-              return _tradeMap._stopLimitOrderOpenPosition(reqBody)
+              return _tradeMap._stopLimitOrderOpenPosition(reqBody, pairDoc);
             }
           } else {
             _tradeMap._createResponseUSDTPerpetual({
@@ -185,24 +214,8 @@ exports.createOrder = async function (reqBody) {
 /** 
  * orderType, action, pair, price, amount, leverage, 
 */
-mapTrade.prototype._limitOrderOpenPosition = async function (reqBody) {
+mapTrade.prototype._limitOrderOpenPosition = async function (reqBody, pairDoc) {
   try {
-    let pairDoc = await pairsDB.findOne(
-      { "pair": reqBody.pair, 'status': "active" }
-    )
-    .populate('fromCurrency')
-    .populate('toCurrency');
-    if (!pairDoc) {
-      return _tradeMap._createResponseUSDTPerpetual({
-        "status": false,
-        "message": "Invalid pair",
-        "userId": reqBody.userId
-      });
-    }
-    reqBody.price = parseFloat(reqBody.price);
-    reqBody.amount = parseFloat(reqBody.amount);
-    reqBody.leverage = parseFloat(reqBody.leverage);
-
     let checkSpOrd = await checkTpSlOrder({
       type: reqBody.type,
       isTP: reqBody.isTP,
@@ -297,21 +310,8 @@ mapTrade.prototype._limitOrderOpenPosition = async function (reqBody) {
 /** 
  * orderType, action, pair, price, amount, leverage, 
 */
-mapTrade.prototype._limitOrderClosePosition = async function (reqBody) {
+mapTrade.prototype._limitOrderClosePosition = async function (reqBody, pairDoc) {
   try {
-    let pairDoc = await pairsDB.findOne({ "pair": reqBody.pair, 'status': "active" }).populate('fromCurrency').populate('toCurrency')
-    if (!pairDoc) {
-      return _tradeMap._createResponseUSDTPerpetual({
-        "status": false,
-        "message": "Invalid pair",
-        "userId": reqBody.userId
-      }), 'createRespUSDTPerpetualPosClose';
-    }
-
-    reqBody.price = parseFloat(reqBody.price);
-    reqBody.amount = parseFloat(reqBody.amount);
-    reqBody.leverage = parseFloat(reqBody.leverage);
-
     let status = 'active';
     if (reqBody.type == 'buy' && reqBody.price > pairDoc.askPrice) {
       reqBody.price = pairDoc.askPrice
@@ -382,20 +382,10 @@ mapTrade.prototype._limitOrderClosePosition = async function (reqBody) {
 /** 
  * orderType, action, pair, price, amount, leverage, 
 */
-mapTrade.prototype._marketOrderOpenPosition = async function (reqBody) {
+mapTrade.prototype._marketOrderOpenPosition = async function (reqBody, pairDoc) {
   try {
-    let pairDoc = await pairsDB.findOne({ "pair": reqBody.pair, 'status': "active" }).populate('fromCurrency').populate('toCurrency')
-    if (!pairDoc) {
-      return _tradeMap._createResponseUSDTPerpetual({
-        "status": false,
-        "message": "Invalid pair",
-        "userId": reqBody.userId
-      });
-    }
 
     reqBody.price = reqBody.type == 'buy' ? pairDoc.askPrice : pairDoc.bidPrice;
-    reqBody.amount = parseFloat(reqBody.amount);
-    reqBody.leverage = parseFloat(reqBody.leverage);
 
     let checkSpOrd = await checkTpSlOrder({
       type: reqBody.type,
@@ -494,16 +484,8 @@ mapTrade.prototype._marketOrderOpenPosition = async function (reqBody) {
 /** 
  * orderType, action, pair, price, amount, leverage, 
 */
-mapTrade.prototype._marketOrderClosePosition = async function (reqBody) {
+mapTrade.prototype._marketOrderClosePosition = async function (reqBody, pairDoc) {
   try {
-    let pairDoc = await pairsDB.findOne({ "pair": reqBody.pair, 'status': "active" }).populate('fromCurrency').populate('toCurrency')
-    if (!pairDoc) {
-      return _tradeMap._createResponseUSDTPerpetual({
-        "status": false,
-        "message": "Invalid pair",
-        "userId": reqBody.userId
-      }, 'createRespUSDTPerpetualPosClose');
-    }
 
     reqBody.price = reqBody.type == 'buy' ? pairDoc.askPrice : pairDoc.bidPrice;
     reqBody.amount = parseFloat(reqBody.amount);
@@ -546,16 +528,8 @@ mapTrade.prototype._marketOrderClosePosition = async function (reqBody) {
 /** 
  * orderType, action, pair, price, amount, leverage, 
 */
-mapTrade.prototype._stopLimitOrderOpenPosition = async function (reqBody) {
+mapTrade.prototype._stopLimitOrderOpenPosition = async function (reqBody, pairDoc) {
   try {
-    let pairDoc = await pairsDB.findOne({ "pair": reqBody.pair, 'status': "active" }).populate('fromCurrency').populate('toCurrency')
-    if (!pairDoc) {
-      return _tradeMap._createResponseUSDTPerpetual({
-        "status": false,
-        "message": "Invalid pair",
-        "userId": reqBody.userId
-      });
-    }
 
     let triggerType
     if (reqBody.markPrice < reqBody.stopPrice) {
@@ -564,9 +538,6 @@ mapTrade.prototype._stopLimitOrderOpenPosition = async function (reqBody) {
       triggerType = "lesser";
     }
 
-    reqBody.price = parseFloat(reqBody.price);
-    reqBody.amount = parseFloat(reqBody.amount);
-    reqBody.leverage = parseFloat(reqBody.leverage);
     reqBody.triggerPrice = parseFloat(reqBody.triggerPrice);
 
     let orderCost = bybitUSDTCalc.orderCost(reqBody.price, reqBody.amount, reqBody.leverage, pairDoc.takerFee, reqBody.type)
@@ -626,6 +597,7 @@ mapTrade.prototype._stopLimitOrderOpenPosition = async function (reqBody) {
     });
   }
 }
+
 mapTrade.prototype._matchingProcess = async function (orderDoc, pairDoc) {
   try {
     if (pairDoc && orderDoc) {

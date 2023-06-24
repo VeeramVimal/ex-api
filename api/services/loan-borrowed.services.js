@@ -42,14 +42,15 @@ const borrowedCreateServices = async (coinBody) => {
                     walletData = []
                     if (userWalletCollateralCoin) {
                         userWalletCollateralCoin.amount = (userWalletCollateralCoin.amount - loanBorrow.collateralAmount)
-                        userWalletCollateralCoin.cryptoLoanAmount = (userWalletCollateralCoin.amount - loanBorrow.collateralAmount);
+                        // userWalletCollateralCoin.cryptoLoanAmount = (userWalletCollateralCoin.amount - loanBorrow.collateralAmount);
+                        userWalletCollateralCoin.cryptoLoanAmount = 0;
                         userWalletCollateralCoin.cryptoLoanHold = loanBorrow.collateralAmount;
                         Object.assign(userWalletCollateralCoin);
                         //** userWallet update the crypto loan collateral amount */
                         await userWalletCollateralCoin.save()
                             .then(
                                 async (userWalletCollateral) => {
-                                    let newAmount = userWalletCollateral.cryptoLoanAmount; //** using crypto loan balance updation in new amount */
+                                    let newAmount = userWalletCollateral.amount; //** using crypto loan balance updation in new amount */
                                     await common.cryptoLoanCollateralBalance(userId, collateralCurrencyId, newAmount, oldAmount, cryptoLoanId, 'Crypto loan collateral asset')
                                 }).catch(err => console.log(err));
                         walletData.push(userWalletCollateralCoin);
@@ -245,43 +246,114 @@ const userWalletServices = async (userId, borrowCurrencyId) => {
     return userWallet;
 };
 
-
 const cryptoRepayServices = async (orderData) => {
-    const repayData = await getSingleLoanServices(orderData.loanOrderId);
-    if (!repayData) throw new Error(messageUtils.CRYPTO_LOAN_NOT_FOUND);
-    const orderRepayDetails = await repayGetSingleServices(orderData);
-    let min = ((repayData.remainingPrinciple) * (10 / 100));
-    let userId = repayData.userId;
-    let collateralCurrencyId = repayData.collateralCurrencyId;
-    let borrowCurrencyId = repayData.borrowCurrencyId;
-    let collateralAmt = repayData.collateralAmount;
-    let percentageOrder = orderData.due_detail[0].due_percentage;
-    const checkWalletAmt = await userWalletServices(userId, borrowCurrencyId);
-    if (checkWalletAmt.amount < orderData.repaymentAmount) throw new Error(`your amount is ${checkWalletAmt.amount}`)
-    if (!orderRepayDetails) {
-        let walletData = [];
-        let repayAmtSub = "";
-        let debtRepayAmt = "";
-        return Repayment.create(orderData).then(async (repay) => {
-            walletData = [];
-            //** loanStatus 0 is Accuring Interest, and loanStatus 1 is Repaid */
+    const orderwith = oArray.indexOf(orderData.userId.toString());
+    if(orderwith == -1){
+        oArray.push(orderData.userId.toString());
+        setTimeout(_intervalFunc, 5000, orderData.userId.toString());
+        // let repayProcessing = false;
+        const repayData = await getSingleLoanServices(orderData.loanOrderId);
+        if (!repayData) throw new Error(messageUtils.CRYPTO_LOAN_NOT_FOUND);
+        const orderRepayDetails = await repayGetSingleServices(orderData);
+        let min = ((repayData.remainingPrinciple) * (10 / 100));
+        let userId = repayData.userId;
+        let collateralCurrencyId = repayData.collateralCurrencyId;
+        let borrowCurrencyId = repayData.borrowCurrencyId;
+        let collateralAmt = repayData.collateralAmount;
+        let percentageOrder = orderData.due_detail[0].due_percentage;
+        const checkWalletAmt = await userWalletServices(userId, borrowCurrencyId);
+        if (checkWalletAmt.amount < orderData.repaymentAmount) throw new Error(`your amount is ${checkWalletAmt.amount}`)
+        // if (repayProcessing) return;
+        if (!orderRepayDetails) {
+            // repayProcessing = true;
+            let walletData = [];
+            let repayAmtSub = "";
+            let debtRepayAmt = "";
+    
+            return Repayment.create(orderData).then(async (repay) => {
+                walletData = [];
+                //** loanStatus 0 is Accuring Interest, and loanStatus 1 is Repaid */
+                collateralCurrencyId && (percentageOrder == 100) && (
+                    UserWallet.findOne(
+                        { userId: userId, currencyId: collateralCurrencyId },
+                        { amount: 1, _id: 1, userId: 1, currencyId: 1, cryptoLoanHold: 1, cryptoLoanAmount: 1 })
+                        .then(async (userWalletCollateralCoin) => {
+                            let oldAmount = userWalletCollateralCoin.cryptoLoanAmount; //** using crypto loan balance updation in old amount */
+                            walletData = [];
+                            if (userWalletCollateralCoin) {
+                                let newAmount = userWalletCollateralCoin.cryptoLoanAmount + collateralAmt; //** using crypto loan balance updation in new amount */
+                                // let newAmount = collateralAmt; //** using crypto loan balance updation in new amount */
+                                userWalletCollateralCoin.amount = userWalletCollateralCoin.amount + collateralAmt;
+                                userWalletCollateralCoin.cryptoLoanAmount = 0;
+                                userWalletCollateralCoin.cryptoLoanHold = ((percentageOrder == 100) ? 0.00000000 : userWalletCollateralCoin.cryptoLoanHold);
+                                Object.assign(userWalletCollateralCoin);
+                                await userWalletCollateralCoin.save();
+                                await common.cryptoLoanCollateralBalance(userId, collateralCurrencyId, newAmount, oldAmount, repay._id, 'Crypto loan repaid accuring interest collateral coin')
+                                walletData.push(userWalletCollateralCoin);
+                                // return walletData;
+                            }
+                        }).catch((err) => console.log(err))
+                );
+                borrowCurrencyId && (
+                    UserWallet.findOne(
+                        { userId: userId, currencyId: borrowCurrencyId },
+                        { amount: 1, _id: 1, userId: 1, currencyId: 1, cryptoLoanHold: 1, cryptoLoanAmount: 1 })
+                        .then(async (userWalletBorrowCoin) => {
+                            let oldAmount = userWalletBorrowCoin.amount;  //** using crypto loan balance updation in old amount */
+                            walletData = [];
+                            if (userWalletBorrowCoin) {
+                                let newAmount = userWalletBorrowCoin.amount - repay.due_detail[0].due_paid_amount;
+                                // userWalletBorrowCoin.cryptoLoanAmount = (userWalletBorrowCoin.cryptoLoanAmount - repay.due_detail[0].due_paid_amount);
+                                userWalletBorrowCoin.amount = (userWalletBorrowCoin.amount - repay.due_detail[0].due_paid_amount);
+                                userWalletBorrowCoin.cryptoLoanHold = ((percentageOrder == 100) ? 0.00000000 : userWalletBorrowCoin.cryptoLoanHold)
+                                Object.assign(userWalletBorrowCoin);
+                                await userWalletBorrowCoin.save()
+                                // .then(async() => {
+                                // }).catch((err) => console.log(err));
+                                await common.cryptoLoanBorrowBalance(userId, borrowCurrencyId, newAmount, oldAmount, repay._id, 'Crypto loan repaid accuring interest borrow coin')
+                                walletData.push(userWalletBorrowCoin);
+                            }
+                        }).catch((err) => console.log(err))
+                );
+                if (repayData) {
+                    // repayAmtSub = repayData.remainingPrinciple - repay.due_detail[0].due_paid_amount;
+                    repayAmtSub = repayData.remainingPrinciple - repay.repaymentAmount;
+                    // debtRepayAmt = repayData.debtLoanableAmount - repay.due_detail[0].due_paid_amount;
+                    repayData.collateralAmount = (percentageOrder == 100) ? 0.00000000 : repayData.collateralAmount;
+                    repayData.remainingPrinciple = (repayAmtSub == 0) ? 0.00000000 : repayAmtSub;
+                    // repayData.debtLoanableAmount = (percentageOrder == 100) ? 0.00000000 : debtRepayAmt;
+                    repayData.yearlyInterestRate = (percentageOrder == 100) ? 0 : repayData.yearlyInterestRate;
+                    repayData.loanStatus = (percentageOrder == 100) ? 1 : 0;
+                    repayData.RepaidDate = new Date();
+                    Object.assign(repayData);
+                    await repayData.save();
+                    await common.loanActivityLogs(userId, " ", " ", repay._id, 'Crypto Loan Repaid', `Crypto loan due amount ${parseFloat(repay.due_detail[0].due_paid_amount).toFixed(8)} is repaid`)
+                    return repayData;
+                }
+                repayProcessing = false;
+                return { data: repayData, message: messageUtils.REPAYMENT_SUCCESS }
+            }).catch((err) => console.log(err))
+        } 
+        else {
+            repayProcessing = true;
+            orderData.due_status = 'Repaid';
             collateralCurrencyId && (percentageOrder == 100) && (
                 UserWallet.findOne(
                     { userId: userId, currencyId: collateralCurrencyId },
                     { amount: 1, _id: 1, userId: 1, currencyId: 1, cryptoLoanHold: 1, cryptoLoanAmount: 1 })
                     .then(async (userWalletCollateralCoin) => {
                         let oldAmount = userWalletCollateralCoin.cryptoLoanAmount; //** using crypto loan balance updation in old amount */
-                        walletData = [];
                         if (userWalletCollateralCoin) {
                             let newAmount = userWalletCollateralCoin.cryptoLoanAmount + collateralAmt; //** using crypto loan balance updation in new amount */
+                            // let newAmount =  collateralAmt; //** using crypto loan balance updation in new amount */
                             userWalletCollateralCoin.amount = userWalletCollateralCoin.amount + collateralAmt;
-                            userWalletCollateralCoin.cryptoLoanAmount = newAmount;
+                            userWalletCollateralCoin.cryptoLoanAmount = 0;
                             userWalletCollateralCoin.cryptoLoanHold = ((percentageOrder == 100) ? 0.00000000 : userWalletCollateralCoin.cryptoLoanHold);
                             Object.assign(userWalletCollateralCoin);
-                            await userWalletCollateralCoin.save();
-                            await common.cryptoLoanCollateralBalance(userId, collateralCurrencyId, newAmount, oldAmount, repay._id, 'Crypto loan repaid accuring interest collateral coin')
-                            walletData.push(userWalletCollateralCoin);
-                            // return walletData;
+                            await userWalletCollateralCoin.save()
+                            // .then(async() => {
+                            // }).catch((err) => console.log(err));
+                            await common.cryptoLoanCollateralBalance(userId, collateralCurrencyId, newAmount, oldAmount, orderRepayDetails._id, 'Crypto loan repaid accuring interest collateral coin');
                         }
                     }).catch((err) => console.log(err))
             );
@@ -290,106 +362,63 @@ const cryptoRepayServices = async (orderData) => {
                     { userId: userId, currencyId: borrowCurrencyId },
                     { amount: 1, _id: 1, userId: 1, currencyId: 1, cryptoLoanHold: 1, cryptoLoanAmount: 1 })
                     .then(async (userWalletBorrowCoin) => {
-                        let oldAmount = userWalletBorrowCoin.amount;  //** using crypto loan balance updation in old amount */
-                        walletData = [];
+                        let oldAmount = userWalletBorrowCoin.cryptoLoanAmount;
                         if (userWalletBorrowCoin) {
-                            let newAmount = userWalletBorrowCoin.amount - repay.due_detail[0].due_paid_amount;
-                            // userWalletBorrowCoin.cryptoLoanAmount = (userWalletBorrowCoin.cryptoLoanAmount - repay.due_detail[0].due_paid_amount);
-                            userWalletBorrowCoin.amount = (userWalletBorrowCoin.amount - repay.due_detail[0].due_paid_amount);
+                            let newAmount = userWalletBorrowCoin.amount - orderData.due_detail[0].due_paid_amount //** using crypto loan balance updation in new amount */
+                            // userWalletBorrowCoin.cryptoLoanAmount = (userWalletBorrowCoin.cryptoLoanAmount - orderData.due_detail[0].due_paid_amount);
+                            userWalletBorrowCoin.amount = (userWalletBorrowCoin.amount - orderData.due_detail[0].due_paid_amount);
                             userWalletBorrowCoin.cryptoLoanHold = ((percentageOrder == 100) ? 0.00000000 : userWalletBorrowCoin.cryptoLoanHold)
                             Object.assign(userWalletBorrowCoin);
                             await userWalletBorrowCoin.save()
                             // .then(async() => {
                             // }).catch((err) => console.log(err));
-                            await common.cryptoLoanBorrowBalance(userId, borrowCurrencyId, newAmount, oldAmount, repay._id, 'Crypto loan repaid accuring interest borrow coin')
-                            walletData.push(userWalletBorrowCoin);
+                            await common.cryptoLoanBorrowBalance(userId, borrowCurrencyId, newAmount, oldAmount, orderRepayDetails._id, 'Crypto loan repaid accuring interest borrow coin');
                         }
                     }).catch((err) => console.log(err))
             );
+            if (orderRepayDetails) {
+                orderRepayDetails.repaymentAmount = (parseFloat(orderRepayDetails.repaymentAmount) + parseFloat(orderData.repaymentAmount));
+                orderRepayDetails.due_detail.push(orderData.due_detail[0]);
+                Object.assign(orderRepayDetails);
+                await orderRepayDetails.save();
+            }
             if (repayData) {
-                repayAmtSub = repayData.remainingPrinciple - repay.due_detail[0].due_paid_amount;
-                // debtRepayAmt = repayData.debtLoanableAmount - repay.due_detail[0].due_paid_amount;
+                repayAmtSub = repayData.remainingPrinciple - orderData.due_detail[0].due_paid_amount;
+    
+                // debtRepayAmt = repayData.debtLoanableAmount - orderData.due_detail[0].due_paid_amount;
                 repayData.collateralAmount = (percentageOrder == 100) ? 0.00000000 : repayData.collateralAmount;
                 repayData.remainingPrinciple = (repayAmtSub == 0) ? 0.00000000 : repayAmtSub;
+                // repayData.hourlyInterestRate = 
                 // repayData.debtLoanableAmount = (percentageOrder == 100) ? 0.00000000 : debtRepayAmt;
                 repayData.yearlyInterestRate = (percentageOrder == 100) ? 0 : repayData.yearlyInterestRate;
                 repayData.loanStatus = (percentageOrder == 100) ? 1 : 0;
                 repayData.RepaidDate = new Date();
                 Object.assign(repayData);
                 await repayData.save();
-                await common.loanActivityLogs(userId, " ", " ", repay._id, 'Crypto Loan Repaid', `Crypto loan due amount ${parseFloat(repay.due_detail[0].due_paid_amount).toFixed(8)} is repaid`)
+                await common.loanActivityLogs(userId, " ", " ", orderRepayDetails._id, 'Crypto Loan Repaid', `Crypto loan due amount ${parseFloat(orderData.due_detail[0].due_paid_amount).toFixed(6)} is repaid`);
                 return repayData;
             }
-            return { data: repayData, message: messageUtils.REPAYMENT_SUCCESS }
-        }).catch((err) => console.log(err))
+            repayProcessing = false;
+            return { data: orderRepayDetails, message: messageUtils.REPAYMENT_SUCCESS };
+    
+            // Object.assign(repayData, orderData);
+            // await repayData.save();
+            // return { data: repayData, message: messageUtils.REPAYMENT_SUCCESS };
+    
+        }
     } else {
-        orderData.due_status = 'Repaid';
-        collateralCurrencyId && (percentageOrder == 100) && (
-            UserWallet.findOne(
-                { userId: userId, currencyId: collateralCurrencyId },
-                { amount: 1, _id: 1, userId: 1, currencyId: 1, cryptoLoanHold: 1, cryptoLoanAmount: 1 })
-                .then(async (userWalletCollateralCoin) => {
-                    let oldAmount = userWalletCollateralCoin.cryptoLoanAmount; //** using crypto loan balance updation in old amount */
-                    if (userWalletCollateralCoin) {
-                        let newAmount = userWalletCollateralCoin.cryptoLoanAmount + collateralAmt; //** using crypto loan balance updation in new amount */
-                        userWalletCollateralCoin.amount = userWalletCollateralCoin.amount + collateralAmt;
-                        userWalletCollateralCoin.cryptoLoanAmount = newAmount;
-                        userWalletCollateralCoin.cryptoLoanHold = ((percentageOrder == 100) ? 0.00000000 : userWalletCollateralCoin.cryptoLoanHold);
-                        Object.assign(userWalletCollateralCoin);
-                        await userWalletCollateralCoin.save()
-                        // .then(async() => {
-                        // }).catch((err) => console.log(err));
-                        await common.cryptoLoanCollateralBalance(userId, collateralCurrencyId, newAmount, oldAmount, orderRepayDetails._id, 'Crypto loan repaid accuring interest collateral coin');
-                    }
-                }).catch((err) => console.log(err))
-        );
-        borrowCurrencyId && (
-            UserWallet.findOne(
-                { userId: userId, currencyId: borrowCurrencyId },
-                { amount: 1, _id: 1, userId: 1, currencyId: 1, cryptoLoanHold: 1, cryptoLoanAmount: 1 })
-                .then(async (userWalletBorrowCoin) => {
-                    let oldAmount = userWalletBorrowCoin.cryptoLoanAmount;
-                    if (userWalletBorrowCoin) {
-                        let newAmount = userWalletBorrowCoin.amount - orderData.due_detail[0].due_paid_amount //** using crypto loan balance updation in new amount */
-                        // userWalletBorrowCoin.cryptoLoanAmount = (userWalletBorrowCoin.cryptoLoanAmount - orderData.due_detail[0].due_paid_amount);
-                        userWalletBorrowCoin.amount = (userWalletBorrowCoin.amount - orderData.due_detail[0].due_paid_amount);
-                        userWalletBorrowCoin.cryptoLoanHold = ((percentageOrder == 100) ? 0.00000000 : userWalletBorrowCoin.cryptoLoanHold)
-                        Object.assign(userWalletBorrowCoin);
-                        await userWalletBorrowCoin.save()
-                        // .then(async() => {
-                        // }).catch((err) => console.log(err));
-                        await common.cryptoLoanBorrowBalance(userId, borrowCurrencyId, newAmount, oldAmount, orderRepayDetails._id, 'Crypto loan repaid accuring interest borrow coin');
-                    }
-                }).catch((err) => console.log(err))
-        );
-        if (orderRepayDetails) {
-            orderRepayDetails.repaymentAmount = (parseFloat(orderRepayDetails.repaymentAmount) + parseFloat(orderData.repaymentAmount));
-            orderRepayDetails.due_detail.push(orderData.due_detail[0]);
-            Object.assign(orderRepayDetails);
-            await orderRepayDetails.save();
-        }
-        if (repayData) {
-            repayAmtSub = repayData.remainingPrinciple - orderData.due_detail[0].due_paid_amount;
-            // debtRepayAmt = repayData.debtLoanableAmount - orderData.due_detail[0].due_paid_amount;
-            repayData.collateralAmount = (percentageOrder == 100) ? 0.00000000 : repayData.collateralAmount;
-            repayData.remainingPrinciple = (repayAmtSub == 0) ? 0.00000000 : repayAmtSub;
-            // repayData.debtLoanableAmount = (percentageOrder == 100) ? 0.00000000 : debtRepayAmt;
-            repayData.yearlyInterestRate = (percentageOrder == 100) ? 0 : repayData.yearlyInterestRate;
-            repayData.loanStatus = (percentageOrder == 100) ? 1 : 0;
-            repayData.RepaidDate = new Date();
-            Object.assign(repayData);
-            await repayData.save();
-            await common.loanActivityLogs(userId, " ", " ", orderRepayDetails._id, 'Crypto Loan Repaid', `Crypto loan due amount ${parseFloat(orderData.due_detail[0].due_paid_amount).toFixed(6)} is repaid`);
-            return repayData;
-        }
-        return { data: orderRepayDetails, message: messageUtils.REPAYMENT_SUCCESS };
-
-        // Object.assign(repayData, orderData);
-        // await repayData.save();
-        // return { data: repayData, message: messageUtils.REPAYMENT_SUCCESS };
-
+        setTimeout(_intervalFunc, 5000, orderData.userId.toString());
+        // return { status: false, message: "Please wait for 5 seconds before placing another request!" }
+        throw new Error(messageUtils.SET_TIME_INTERVAL);
     }
-
+};
+let oArray = [];
+const  _intervalFunc = (orderwith) => {
+    orderwith = orderwith.toString();
+    var index = oArray.indexOf(orderwith);
+    if (index > -1) {
+        oArray.splice(index, 1);
+    }
 }
 module.exports = {
     borrowedCreateServices,

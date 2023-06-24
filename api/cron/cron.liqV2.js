@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const query_helper = require('./helpers/query');
+const query_helper = require('../helpers/query');
 const trade = require('../helpers/trade');
 const p2pHelper = require('../helpers/p2p');
 let common = require('../helpers/common');
@@ -7,11 +7,11 @@ const cron = require("node-cron");
 
 let coinDCX = require('../socketFiles/coinDCX');
 let bybit = require('../socketFiles/bybit');
-// let huobi = require('./socketFiles/huobi');
+// let huobi = require('../socketFiles/huobi');
 
 let config = require("../Config/config");
 
-const customerWalletController = require('../controllers/customerWalletController');
+const customerWalletController = require('../controllers/v1/customerWalletController');
 
 let pairsDB = mongoose.model('Pairs');
 const DerivativesPairDB = mongoose.model("DerivativesPairs");
@@ -24,7 +24,7 @@ require('events').defaultMaxListeners = 0;
 // var WebSocket = require('ws');
 let io = require('socket.io-client');
 
-// const OrderBook = require('./model/OrderBook');
+// const OrderBook = require('../model/OrderBook');
 let OrderBookDB = mongoose.model('OrderBook');
 
 // let socketLink = "coindcx";
@@ -901,22 +901,45 @@ if(config.env !== "local") {
 	connectWS();
 	getChannelName();
 
-	cron.schedule("*/5 * * * *",(req,res)=>{
-		// console.log("processWithdrawal : ");
-		customerWalletController.processWithdrawal();
+	let cronprocessWithdrawalRunning = false;
+	cron.schedule("*/5 * * * *", async(req,res)=>{
+		if (cronprocessWithdrawalRunning) {
+			return true;
+		}
+		cronprocessWithdrawalRunning = true;
+		await customerWalletController.processWithdrawal();
+		cronprocessWithdrawalRunning = false;
 	});
 
-	cron.schedule("* * * * *", (req,res)=>{
-		tickerUpdate();
-		liquidityChecking();
+	let cronliquidityCheckingRunning = false;
+	cron.schedule("* * * * *", async(req,res)=>{
+		if (cronliquidityCheckingRunning) {
+			return true;
+		}
+		cronliquidityCheckingRunning = true;
+		await tickerUpdate();
+		await liquidityChecking();
+		cronliquidityCheckingRunning = false;
 	});
 
-	cron.schedule("* * * * *", (req,res)=>{
-		updateCronPrice();
+	let updateCronPriceRunning = false;
+	cron.schedule("* * * * *", async(req,res)=>{
+		if (updateCronPriceRunning) {
+			return true;
+		}
+		updateCronPriceRunning = true;
+		await updateCronPrice();
+		updateCronPriceRunning = false;
 	});
 
-	cron.schedule("*/5 * * * * *", (req,res)=>{
-		p2pHelper.cronCancelOrder();
+	let cronCancelOrderRunning = false;
+	cron.schedule("*/5 * * * * *", async (req,res)=>{
+		if (cronCancelOrderRunning) {
+			return true;
+		}
+		cronCancelOrderRunning = true;
+		await p2pHelper.cronCancelOrder();
+		cronCancelOrderRunning = false;
 	});
 
 	cron.schedule("*/10 * * * * *", (req,res)=>{
@@ -944,8 +967,8 @@ if(config.env !== "local") {
 	// production
 	// const BTCXRPCoinChkEnv = "development";
 	// if(process.env.NODE_ENV == BTCXRPCoinChkEnv) {
-	// 	const BTCCOIN = require('./helpers/CoinTransactions/BTC.js');
-	// 	const XRPCOIN = require('./helpers/CoinTransactions/XRP.js');
+	// 	const BTCCOIN = require('../helpers/CoinTransactions/BTC.js');
+	// 	const XRPCOIN = require('../helpers/CoinTransactions/XRP.js');
 	// 	setInterval(function(){
 	// 		if(common.getSiteDeploy() == 0) {
 	// 			BTCCOIN.CoinDeposit();
