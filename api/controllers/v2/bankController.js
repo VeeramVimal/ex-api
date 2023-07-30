@@ -1,9 +1,5 @@
 const mongoose = require('mongoose');
 const Users = mongoose.model("Users");
-const SiteSettings = mongoose.model("SiteSettings");
-const Currency = mongoose.model("Currency");
-const VoucherDB = mongoose.model("Voucher");
-const emailTemplate = mongoose.model("EmailTemplate");
 const P2PPayment = mongoose.model("P2PPayment");
 
 const fs = require("fs");

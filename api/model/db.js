@@ -8,7 +8,6 @@ if (config.caPath != '') {
   mongoose.connect(config.dbconnection, { useNewUrlParser: true, useCreateIndex: true, useFindAndModify: false, useUnifiedTopology: true }).then(() => console.log(config.dbName + " Mongo DB Connected")).catch((err) => console.error(err));
 }
 mongoose.connection.on('connected', function () {
-  // require('../cron/initial.USDTPerpetual').initialCall();
   console.log('Mongoose default connection open');
 });
 mongoose.connection.on('error', function (err) {
@@ -94,3 +93,5 @@ require('./LeadTrader');
 require('./CopyTraderRequest');
 require('./LaunchPad-token.model');
 require('./LaunchPad-balanceUpdation.model');
+require('./gamePredictionBalanceUpdation');
+require('./SimpleEarnBalanceUpdation');

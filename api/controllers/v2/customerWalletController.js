@@ -31,7 +31,9 @@ const customerWalletController = {
                         perpetualAmount:wallet.perpetualAmount, 
                         perpetualHold:wallet.perpetualHold,
                         cryptoLoanAmount: wallet.cryptoLoanAmount,
-                        cryptoLoanHold: wallet.cryptoLoanHold
+                        cryptoLoanHold: wallet.cryptoLoanHold,
+                        gamePredictionAmount: wallet.gamePredictionAmount,
+                        simpleEarnAmount: wallet.simpleEarnAmount,
                     };
                 }
             }
@@ -122,6 +124,8 @@ const customerWalletController = {
                         entryData.perpetualHold=  walletBalances[entry.currencyId].perpetualHold;
                         entryData.cryptoLoanAmount = walletBalances[entry.currencyId].cryptoLoanAmount;
                         entryData.cryptoLoanHold = walletBalances[entry.currencyId].cryptoLoanHold;
+                        entryData.gamePredictionAmount = walletBalances[entry.currencyId].gamePredictionAmount;
+                        entryData.simpleEarnAmount = walletBalances[entry.currencyId].simpleEarnAmount;
 
                     } else {
                         entryData.balance = 0;
@@ -134,6 +138,8 @@ const customerWalletController = {
                         entryData.perpetualHold = 0;
                         entryData.cryptoLoanAmount = 0;
                         entryData.cryptoLoanHold = 0;
+                        entryData.gamePredictionAmount = 0;
+                        entryData.simpleEarnAmount = 0;
                     }
                     
                     if(entryData.balance > 0) {

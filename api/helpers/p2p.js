@@ -50,17 +50,55 @@ exports.cronCancelOrder = async function () {
     }
 }
 
-exports.cronOrderClose = async function () {
-    let ordersData = await P2POrder.find({ status : 1});
+exports.p2pOrderClose = async function (data = {}) {
+    const orderID = data.orderId;
+    let ordersData = await P2POrder.aggregate([
+        {
+            $match: {
+                _id: mongoose.Types.ObjectId(orderID),
+                status: 1,
+                usdtPrice: 0,
+                orderAmount: {
+                    "$gt": 0
+                }
+            }
+        },
+        {
+            $lookup: {
+              from: 'P2PTransactions',
+              let: {
+                orderId: '$_id',
+              },
+              pipeline: [
+                {
+                  $match: {
+                    $expr: {
+                      $and: [
+                        { "$eq": ["$orderId", "$$orderId"] },
+                        { "$eq": ["$status", 3] },
+                      ]
+                    }
+                  }
+                },
+                {
+                  $limit: 1
+                }
+              ],
+              as: "P2PTransactionsDet"
+            }
+        }
+    ]);
     if (ordersData && ordersData.length > 0) {
         let ids = [];
         ordersData.forEach(element => {
-            if (element.usdtPrice === 0) {
+            if (element.P2PTransactionsDet && element.P2PTransactionsDet.length == 0) {
                 ids.push(element._id);
             }
         });
         await query_helper.updateData(P2POrder, 'one', { _id: {$in: ids} }, { status: 0, reason: "Order completed" });
     }
+
+    return true;
 }
 
 exports.cronadminCancelOrder = async function () {
@@ -115,7 +153,7 @@ let cancelOrder = exports.cancelOrder = async function ( orderNo, userId, data, 
                 let checkTxn = await query_helper.findoneData(P2PTransactions, { orderNo: orderNo }, {});
                 if (checkTxn.status) {
                     checkTxn = checkTxn.msg;
-                    await query_helper.updateData(P2PTransactions, "one", { orderNo: orderNo }, { status: 2, verifyStep: 4 });
+                    await query_helper.updateData(P2PTransactions, "one", { orderNo: orderNo }, { status: 2, verifyStep: 4, cancelledDate: new Date() });
                     await query_helper.updateData(P2PAppealHistory, "one", { orderNo: orderNo }, { status: 2 });
 
                     if(orderData.orderType == 'buy') {
@@ -133,12 +171,15 @@ let cancelOrder = exports.cancelOrder = async function ( orderNo, userId, data, 
                     }
                     let userResult = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(userId) }, {});
                     let userStatus = userResult.msg;
-                    let smsTemplate =  "[ Exchange ] P2P Order"+ checkData.orderNo.slice(- 4) + " has been cancelled.";
+                    let smsTemplate =  "[ Exchange ] P2P Order "+ checkData.orderNo.slice(- 4) + " has been cancelled.";
+                    let smsTemplatenew =  "P2P Order "+ checkData.orderNo.slice(- 4) + " has been cancelled.";
                     await common.mobileSMS(userStatus.phoneno, smsTemplate, {section: "p2p"});
-                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-Cancel' }, {});
+                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-cancel-new' }, {});
+                    let username = userStatus.username != "" ? userStatus.username : (userStatus.email) != "" ? userStatus.email : userStatus.phoneno;
                     await common.p2pactivtylog(checkTxn.userId, checkTxn.ownerId, checkTxn.orderNo, "", (checkTxn.orderType) +' Order cancelled', 'Order Cancelled successfully');
-                    let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, userStatus.username).replace(/###ORDERNO###/g, orderNo).replace(/###REASON###/g, data.cancelReason);
-                    mail_helper.sendMail({ subject: email_data.msg.subject, to: userStatus.email, html: etempdataDynamic }, function (res1) {
+                    let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, username).replace(/###ORDERNO###/g, orderNo).replace(/###REASON###/g, data.cancelReason);
+                    let p2pcancelOrderetempdata = email_data.msg.content.replace(/###USERNAME###/g, username).replace(/###CONTENT###/g, smsTemplatenew).replace(/###REASON###/g, data.cancelReason);;
+                    mail_helper.sendMail({ subject: email_data.msg.subject, to: userStatus.email, html: p2pcancelOrderetempdata }, function (res1) {
                     });
                 }
                 createp2pOrder(checkData, "socket", "");
@@ -168,7 +209,7 @@ let admincancelOrder = exports.admincancelOrder = async function (orderNo, userI
             let checkTxn = await query_helper.findoneData(P2PTransactions, { orderNo: orderNo }, {});
             if (checkTxn.status) {
                 checkTxn = checkTxn.msg;
-                await query_helper.updateData(P2PTransactions, "one", { orderNo: orderNo }, { status: 2, verifyStep: 4 });
+                await query_helper.updateData(P2PTransactions, "one", { orderNo: orderNo }, { status: 2, verifyStep: 4, cancelledDate: new Date() });
                 await query_helper.updateData(P2PAppealHistory, "one", { orderNo: orderNo }, { status: 2 });
 
                 if(orderData.orderType == 'buy') {
@@ -187,14 +228,17 @@ let admincancelOrder = exports.admincancelOrder = async function (orderNo, userI
                 let userResult = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(userId) }, {});
                 let userStatus = userResult.msg;
                 let smsTemplate =  "[ Exchange ] P2P Order"+ checkData.orderNo.slice(- 4) + " has been cancelled by admin.";
+                let mailTemplatenew =  "P2P Order "+ checkData.orderNo.slice(- 4) + " has been cancelled by admin.";
                 await common.mobileSMS(userStatus.phoneno, smsTemplate, {section: "p2p"});
-                let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-admin-order-Cancel' }, {});
+                let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-admin-order-cancel-new' }, {});
                 if(email_data && email_data.msg && email_data.msg.content) {
                     let etempdataDynamic = email_data.msg.content
                         .replace(/###NAME###/g, userStatus.username ? userStatus.username : "")
                         .replace(/###ORDERNO###/g, orderNo)
                         .replace(/###REASON###/g, data.cancelReason ? data.cancelReason : "");
-                    mail_helper.sendMail({ subject: email_data.msg.subject, to: userStatus.email, html: etempdataDynamic }, function (res1) {
+                    let username = userStatus.username != "" ? userStatus.username : userStatus.email != "" ? userStatus.email : userStatus.phoneno;
+                    let p2pcancelOrderetempdata = email_data.msg.content.replace(/###USERNAME###/g, username).replace(/###CONTENT###/g, mailTemplatenew).replace(/###REASON###/g, data.cancelReason ? data.cancelReason : "");
+                    mail_helper.sendMail({ subject: email_data.msg.subject, to: userStatus.email, html: p2pcancelOrderetempdata }, function (res1) {
                     });
                 }
             }

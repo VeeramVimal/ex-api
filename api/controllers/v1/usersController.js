@@ -16,23 +16,24 @@ let ReferralDB = mongoose.model('ReferralCommission');
 let BalanceUpdation = mongoose.model("BalanceUpdation");
 let StakeBalanceUpdation = mongoose.model('StakeBalanceUpdation');
 const P2PBalanceUpdation = mongoose.model("P2PBalanceUpdation");
+const USDMBalanceUpdation = mongoose.model("USDMBalanceUpdation");
 
 const usersController = {
     async getUsers(req, res) {
         try {
             let sortOption = { updatedOn: -1 };
             let matchQ = {};
-            if(req.body.formvalue.fromdate!='' && req.body.formvalue.todate!=''){
-                var fromDate= new Date(req.body.formvalue.fromdate);
-                var toDate = new Date(req.body.formvalue.todate);
-                var dateFilter= new Date(fromDate.setTime(fromDate.getTime() + 5.5*60*60*1000));
-                var nextDateFilter = new Date(toDate.setTime(toDate.getTime() + 29.49*60*60*1000));
-                matchQ.registerOn = {
-                    "$gte":dateFilter,
-                    "$lt":nextDateFilter
-                }
-            }
             if(req.body.formvalue) {
+                if(req.body.formvalue.fromdate!='' && req.body.formvalue.todate!=''){
+                    var fromDate= new Date(req.body.formvalue.fromdate);
+                    var toDate = new Date(req.body.formvalue.todate);
+                    var dateFilter= new Date(fromDate.setTime(fromDate.getTime() + 5.5*60*60*1000));
+                    var nextDateFilter = new Date(toDate.setTime(toDate.getTime() + 29.49*60*60*1000));
+                    matchQ.registerOn = {
+                        "$gte":dateFilter,
+                        "$lt":nextDateFilter
+                    }
+                }
                 if (req.body.formvalue.status != '') {
                     matchQ.status = req.body.formvalue.status;
                 }
@@ -328,6 +329,50 @@ const usersController = {
             res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
         }
     },
+    async getUSDMBalance(req,res){
+        try{
+            let users = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(req.body.data._id) }, {});
+            if (users.status) {
+                let limit =req.body.data.limit?parseInt(req.body.data.limit):10;
+                let offset =req.body.data.offset? parseInt(req.body.data.offset):0
+                USDMBalanceUpdation.aggregate([
+                    {
+                        $match: {userId:req.body.data._id}
+                    },
+                    {
+                        $lookup:
+                        {
+                            from: 'Currency',
+                            localField: 'currencyId',
+                            foreignField: 'currencyId',
+                            as: 'currencydet'
+                        }
+                    },
+                    {
+                        $project: {
+                            "currencySymbol": { $arrayElemAt: ["$currencydet.currencySymbol", 0] },
+                            "oldBalance":"$oldBalance",
+                            "amount":"$amount",
+                            "type":"$type",
+                            "difference":"$difference",
+                            "dateTime": "$dateTime"
+                        }
+                    },
+                    { $sort: { dateTime: -1 } },
+                    {$limit: offset+limit},
+                    {$skip: offset}
+                ]).exec(async function (err, result) {
+                    let usdmBalancecount = await USDMBalanceUpdation.find({userId: req.body.data._id }).countDocuments();
+                    res.json({ "status": true, "usdmBalance": result ,"total":usdmBalancecount});
+                });
+            } else {
+                res.json({ "status": false,"message":"Invalid userId" });
+            }
+        }
+        catch(err){
+            res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
+        }
+    },
     async tradehistorydetails(req,res){
         try{
             let users = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(req.body.data._id) }, {});
@@ -575,7 +620,9 @@ const usersController = {
                         }
                         break;
                     case 'p2pDisable':
-                        if(typeof req.body.userReason != 'undefined' && typeof req.body.userReason != undefined && req.body.userReason != '') {
+                        if((typeof req.body.userReason == '' && typeof req.body.userReason == undefined && req.body.userReason == '') && users.msg.p2pDisabled != 1) {
+                            return res.json({ "status": false, "message": "Please enter reason!" });
+                        }
                             let updateTradeStatusData = {
                                 p2pDisabled: users.msg.p2pDisabled == 1 ? 0 : 1,
                                 p2pblockStatus: req.body.userReason
@@ -583,12 +630,11 @@ const usersController = {
                             await query_helper.updateData(Users, "one", { _id: mongoose.Types.ObjectId(req.body._id) }, updateTradeStatusData);
                             await common.adminactivtylog(req, 'User P2P Status', req.userId, mongoose.Types.ObjectId(req.body._id), +users.msg.p2pDisabled == '0' ? 'User P2P Disable':'User P2P Enable', users.msg.p2pDisabled == '0' ? 'User P2P Disable Successfully' : 'User P2P Enable Successfully');
                             res.json({ "status": true, "message": "Users P2P  Status Changed Successfully!" });
-                        } else {
-                            res.json({ "status": false, "message": "Please enter reason!" });
-                        }
                         break;
                     case 'usdmDisable':
-                        if(typeof req.body.userReason != 'undefined' && typeof req.body.userReason != undefined && req.body.userReason != '') {
+                        if((typeof req.body.userReason == '' && typeof req.body.userReason == undefined && req.body.userReason == '') && users.msg.usdmDisabled != 1) {
+                            return res.json({ "status": false, "message": "Please enter reason!" });
+                        }
                             let updateUSDMData = {
                                 usdmDisabled: users.msg.usdmDisabled == 1 ? 0 : 1,
                                 usdmBlockReason: req.body.userReason
@@ -596,9 +642,6 @@ const usersController = {
                             await query_helper.updateData(Users, "one", { _id: mongoose.Types.ObjectId(req.body._id) }, updateUSDMData);
                             await common.adminactivtylog(req, 'User USD-M Status', req.userId, mongoose.Types.ObjectId(req.body._id), +users.msg.usdmDisabled == '0' ? 'User USD-M Disable':'User USD-M Enable', users.msg.usdmDisabled == '0' ? 'User USD-M Disable Successfully' : 'User USD-M Enable Successfully');
                             res.json({ "status": true, "message": "Users USD-M Status Changed Successfully!" });
-                        } else {
-                            res.json({ "status": false, "message": "Please enter reason!" });
-                        }
                         break;
                     case 'withdrawDisable':
                         if(typeof req.body.userReason != 'undefined' && typeof req.body.userReason != undefined && req.body.userReason != '') {

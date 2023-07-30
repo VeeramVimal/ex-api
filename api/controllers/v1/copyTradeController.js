@@ -226,7 +226,7 @@ const copyTradeController = {
         //                           }
         //                           var total = amount * price;
         //                           if (total < min_trade_amount) {
-        //                             response['msg'] = "Trade Total must be " + min_trade_amount + " " + pair_details.tocurrency[0].currencySymbol;
+        //                             response['msg'] = "Enter trade total must be more than " + min_trade_amount + " " + pair_details.tocurrency[0].currencySymbol;
         //                             _tradeMap._createResponse(response);
         //                           } else {
         //                             const markerResponse = await getOrderValue(orderType, pair_details._id, type, price);

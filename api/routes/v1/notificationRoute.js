@@ -9,3 +9,5 @@ router.get('/getAllClearedNotification',notificationController.getAllClearedNoti
 module.exports = router;
 
 
+
+

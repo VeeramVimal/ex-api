@@ -15,6 +15,8 @@ var pairsSchema = new Schema({
     "totalDecimal"       : { type: Number, default: 4 },
     "fromCurrency"       : { type: mongoose.Schema.Types.ObjectId, ref: 'Currency'},
     "toCurrency"         : { type: mongoose.Schema.Types.ObjectId, ref: 'Currency'},
+    "fromCurrencyId"     : { type: mongoose.Schema.Types.ObjectId, ref: 'CurrencySymbol'},
+    "toCurrencyId"       : { type: mongoose.Schema.Types.ObjectId, ref: 'CurrencySymbol'},
     "pair"               : { type: String, required: true},
     // index: true, unique: true
     "status"             : { type: Number, default: 1 },

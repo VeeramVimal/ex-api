@@ -4,6 +4,8 @@ var Schema = mongoose.Schema;
 var p2ppairSchema = new Schema({
     "fromCurrency"       : { type: mongoose.Schema.Types.ObjectId, ref: 'Currency'}, 
     "toCurrency"         : { type: mongoose.Schema.Types.ObjectId, ref: 'Currency'}, 
+    "minTotalAmount"     : { type: Number, default: 0 },
+    "maxTotalAmount"     : { type: Number, default: 0 },
     "minTrade"           : { type: Number, default: 0 },
     "maxTrade"           : { type: Number, default: 0 },
     "fromDecimal"        : { type: Number, default: 0 },

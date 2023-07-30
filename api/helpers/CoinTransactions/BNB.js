@@ -591,11 +591,12 @@ exports.AdminMoveProcess = function () {
                         },
                         "address": { "$first": "$address" }
                     }
-                }
+                },
+                // { $limit: 3 }
             ]).exec(function (err, resData) {
                 for (let i = 0; i < resData.length; i++) {
-                    setTimeout(() => {
-                        movingProcess(resData[i]);
+                    setTimeout(async() => {
+                        await movingProcess(resData[i]);
                     }, i*1000);
                 }
             });
@@ -664,10 +665,10 @@ exports.AdminTokenMoveProcess = function () {
                 {
                     $lookup:
                     {
-                    from: 'Currency',
-                    localField: 'currencyId',
-                    foreignField: '_id',
-                    as: 'currency'
+                        from: 'Currency',
+                        localField: 'currencyId',
+                        foreignField: '_id',
+                        as: 'currency'
                     }
                 },
                 { "$unwind": "$currency" },
@@ -680,13 +681,14 @@ exports.AdminTokenMoveProcess = function () {
                         "address": { "$first": "$address" },
                         "currency" : { "$first": "$currency" }
                     }
-                }
+                },
+                // { $limit: 3 }
             ]).exec(function (err, resData) {
                 if(resData.length > 0){
                     for (let i = 0; i < resData.length; i++) {
-                        setTimeout(() => {
-                            tokenMovingProcess(resData[i]);
-                        }, i*1000);
+                        setTimeout(async() => {
+                            await tokenMovingProcess(resData[i]);
+                        }, i*10000);
                     }
                 }
             });

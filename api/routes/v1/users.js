@@ -10,6 +10,7 @@ router.post('/balancedetails', commonHelper.tokenMiddlewareAdmin, usersControlle
 router.post('/tradehistorydetails',commonHelper.tokenMiddlewareAdmin, usersController.tradehistorydetails)
 router.post('/referreduserdetails',commonHelper.tokenMiddlewareAdmin, usersController.referreduserdetails)
 router.post('/stakeBalanceDetails',commonHelper.tokenMiddlewareAdmin, usersController.stakeBalanceDetails);
-router.post('/p2pBalanceDetails',commonHelper.tokenMiddlewareAdmin, usersController.p2pBalanceDetails)
-router.post('/getReferralData',commonHelper.tokenMiddlewareAdmin, usersController.getReferralData)
+router.post('/p2pBalanceDetails',commonHelper.tokenMiddlewareAdmin, usersController.p2pBalanceDetails);
+router.post('/getReferralData',commonHelper.tokenMiddlewareAdmin, usersController.getReferralData);
+router.post('/getUSDMBalance',commonHelper.tokenMiddlewareAdmin, usersController.getUSDMBalance);
 module.exports = router;

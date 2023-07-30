@@ -23,6 +23,4 @@ router.post('/userEmailUpdation', commonHelper.tokenMiddlewareAdmin, v2adminCont
 router.post('/getallOrders', commonHelper.tokenMiddlewareAdmin, v2adminController.getallOrders);
 router.post('/getordersDetails', commonHelper.tokenMiddlewareAdmin, v2adminController.getordersDetails);
 
-
 module.exports = router;
-

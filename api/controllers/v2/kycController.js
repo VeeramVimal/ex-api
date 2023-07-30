@@ -12,6 +12,7 @@ const base64ToImage = require("base64-to-image");
 
 const query_helper = require("../../helpers/query");
 const common = require("../../helpers/common");
+const dateHelper = require("../../helpers/date.helper");
 const cloudinary = require("../../helpers/cloudinary");
 const config = require("../../Config/config");
 
@@ -1223,8 +1224,12 @@ const kycController = {
               if (registerOn.getTime() <= dbDate.getTime()) {
                 if (resData.msg.registerBonusStatus === 1) {
                   if (resData.msg.registerBonus > 0) {
+                    const givenDate = new Date();
+                    const expireDate = await dateHelper.addDays({
+                      startDate: givenDate,
+                      days: resData.msg.bonusExpiredPeriod
+                    });
                     let registerBonus = +resData.msg.registerBonus;
-
                     let VoucherInsert = {
                       userId: login_userId,
                       childUserId: login_userId,
@@ -1238,7 +1243,8 @@ const kycController = {
                       claim: 0,
                       expirePeriod: resData.msg.bonusExpiredPeriod,
                       expirePeriodType: "days",
-                      givenDate: new Date(),
+                      givenDate: givenDate,
+                      expireDate: expireDate
                     };
                     if (parentUserId) {
                       VoucherInsert.parentUserId = parentUserId;
@@ -1286,6 +1292,11 @@ const kycController = {
                 }
                 if (resData.msg.referralBonusStatus === 1) {
                   if (resData.msg.referralBonus > 0 && parentUserId != "") {
+                    const givenDate = new Date();
+                    const expireDate = await dateHelper.addDays({
+                      startDate: givenDate,
+                      days: resData.msg.bonusExpiredPeriod
+                    });
                     let referralBonus = +resData.msg.referralBonus;
                     let VoucherInsert = {
                       userId: parentUserId,
@@ -1300,6 +1311,7 @@ const kycController = {
                       expirePeriod: resData.msg.bonusExpiredPeriod,
                       expirePeriodType: "days",
                       givenDate: new Date(),
+                      expireDate: expireDate,
                       parentUserId: parentUserId,
                       childUserId: login_userId,
                       parentUserType: parentUserType,

@@ -311,20 +311,20 @@ const customerController = {
                     updValues.kycMode = "Online";
                 }
                 await query_helper.updateData(Users, 'one', { _id: mongoose.Types.ObjectId(userId) }, updValues);
+
                 let activity = common.activity(req);
-                activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
-                let userActData = await query_helper.findoneData(activityDB, { userId: req.userId, ip: activity.ip, type: "Phoneno Updation" }, {})
-                if (!userActData.status) {
-                    common.userNotify({
-                        userId: req.userId,
-                        reason: 'Phoneno Updation',
-                        activity,
-                        detail: {
-                           oldPhoneno: userDetails.phoneno,
-                           newPhoneno: newPhoneno
-                        }
-                    });
-                }
+                let userNotifyData = {
+                    userId: req.userId,
+                    reason: 'Phoneno Updation',
+                    activity,
+                    detail: {
+                        oldPhoneno: userDetails.phoneno,
+                        newPhoneno: newPhoneno,
+                        ip: activity.ip,
+                        browser: activity.browser
+                    }
+                };
+                common.userNotify(userNotifyData);
                 return res.json({ status: true, message: "Phone number updated successfully" });
             }
             else if(pageName === 'changeEmail') {
@@ -390,23 +390,24 @@ const customerController = {
                         newEmailTime: "",
                         newPhone: 0,
                         newPhoneTime: ""
-                    }
+                    },
+                    tfaStatus: 0,
+                    tfaenablekey: ""
                 };
                 await query_helper.updateData(Users, 'one', { _id: mongoose.Types.ObjectId(userId) }, updValues);
                 let activity = common.activity(req);
-                activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
-                let userActData = await query_helper.findoneData(activityDB, { userId: req.userId, ip: activity.ip, type: "Email Updation" }, {})
-                if (!userActData.status) {
-                    common.userNotify({
-                        userId: req.userId,
-                        reason: 'Email Updation',
-                        activity,
-                        detail: {
-                            oldEmail: userDetails.email,
-                            newEmail: newEmail
-                        }
-                    });
-                }
+                let userNotifyData = {
+                    userId: req.userId,
+                    reason: 'Email Updation',
+                    activity,
+                    detail: {
+                        oldEmail: userDetails.email,
+                        newEmail: newEmail,
+                        ip: activity.ip,
+                        browser: activity.browser
+                    }
+                };
+                common.userNotify(userNotifyData);
                 return res.json({ status: true, message: "Email updated successfully" });
             }
         }

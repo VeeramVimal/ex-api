@@ -5,6 +5,7 @@ const dbCluster = "cluster0.nwfdn.mongodb.net";
 
 let envname = process.env.NODE_ENV;
 
+
 module.exports = {
 	env: envname,
 	dbName: dbName,
@@ -90,12 +91,13 @@ module.exports = {
 	FanTknSymbol: "FBT",
 
 	sectionStatus: {
-		spotTrade: "Enable",
-		perpetualTrade: "Enable",
 		p2p: "Enable",
 		captcha: "Enable",
 		cryptoLoan: "Enable",
+		spotTrade: "Enable",
 		spotTradeCron: "Enable",
+		spotTradeSocket: "Disable",
+		perpetualTrade: "Enable",
 		derivativeCron: "Disable",
 		pushNotification: "Enable",
 		activityNotification: "Disable"

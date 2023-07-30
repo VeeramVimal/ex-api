@@ -13,10 +13,11 @@ var voucherSchema = new Schema({
 	"amount": {type: Number, default: 0},
 	"beforeAmount": {type: Number, default: 0},
 	"afterAmount": {type: Number, default: 0},
-	"claim": {type: Number, default: 0},
-    "claimDate"   : { type: Date },
+	"givenDate": {type: Date, default: Date.now},
 	"expirePeriod": {type: Number, default: 0},
 	"expirePeriodType": {type: String, default: ""},
-	"givenDate": {type: Date, default: Date.now},
+	"expireDate": {type: Date, default: Date.now},
+	"claim": {type: Number, default: 0},
+    "claimDate"   : { type: Date },
 });
 module.exports = mongoose.model('Voucher', voucherSchema, 'Voucher')

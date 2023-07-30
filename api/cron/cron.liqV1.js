@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const query_helper = require("../helpers/query");
 const trade = require("../helpers/trade");
-const p2pHelper = require("../helpers/p2p");
 let common = require("../helpers/common");
 const cron = require("node-cron");
 
@@ -257,8 +256,6 @@ exports.unAvailablePairsUpdate = async (updatedData = {}, options = {}) => {
     PairDBSel = pairsDB;
   }
 
-  console.log("unAvailablePairsUpdate : ", {updatedData, options});
-
   if (updatedData.pair) {
     // autoOrderExecute detail correction
     if (updatedData.autoOrderExecute == 1) {
@@ -430,8 +427,10 @@ let socket = io.connect(socketEndpoint, {
 
 async function wazirxWS() {
   try {
+    if (config.sectionStatus && config.sectionStatus.spotTradeSocket === "Disable") {
+      return;
+    }
     console.log("wazirxWS : ");
-
     socketEndpoint = "https://stream.coindcx.com";
     socket = io.connect(socketEndpoint, {
       transports: ["websocket"],
@@ -681,15 +680,17 @@ async function wazirxWS() {
       }
     });
 
-    socket.on("connect_error", (err) => {
+    socket.on("connect_error", async(err) => {
       console.log("coinDCX socket connect_error : ", err);
+      await wazirxWS();
     });
 
     socket.on("disconnect", async function () {
       console.log("coinDCX socket disconnected : ");
       updateExceptPairs_cronInit = 0;
       // socket.emit('disconnected');
-      socket.connect();
+      // socket.connect();
+      await wazirxWS();
     });
 
     // ws.on('message', function(data, flags) {
@@ -1401,32 +1402,6 @@ if (config.sectionStatus && config.sectionStatus.spotTradeCron != "Disable") {
     updateCronPriceRunning = false;
   });
 
-  let cronCancelOrderRunning = false;
-  cron.schedule("*/5 * * * * *", async (req, res) => {
-    if (cronCancelOrderRunning) {
-      return true;
-    }
-    cronCancelOrderRunning = true;
-    await p2pHelper.cronCancelOrder();
-    cronCancelOrderRunning = false;
-  });
-
-  let cronOrderCloseRunning = false;
-	cron.schedule("*/5 * * * * *", (req,res)=>{
-		if (cronCancelOrderRunning) {
-			return true;
-		}
-		common.cronCheck({
-			from: "cronOrderClose"
-		}, async function (resp) {
-			if(resp && resp.status) {
-				cronOrderCloseRunning = true;
-				p2pHelper.cronOrderClose();
-				cronOrderCloseRunning = false;
-			}
-		});
-	});
-
   let deleteOldData1Running = false;
   cron.schedule("*/10 * * * * *", async (req, res) => {
     if (deleteOldData1Running) {
@@ -1449,11 +1424,11 @@ if (config.sectionStatus && config.sectionStatus.spotTradeCron != "Disable") {
   });
 
   // cron.schedule("*/30 * * * * *",(req,res)=>{
-  //     if(unAvailablePairs.length > 0 && updateExceptPairs_cronInit === 0) {
-  //         unAvailablePairs.forEach(element => {
-  // 			trade.updateExceptPairs(element, percentageChange);
-  //         });
-  //     }
+  //   if(unAvailablePairs.length > 0 && updateExceptPairs_cronInit === 0) {
+  //     unAvailablePairs.forEach(element => {
+  //       trade.updateExceptPairs(element, percentageChange);
+  //     });
+  //   }
   // });
 
   setTimeout(function () {

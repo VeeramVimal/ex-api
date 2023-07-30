@@ -23,6 +23,7 @@ var P2PAppealHistorySchema = new Schema({
       "cancelReason"    : { type: String, default: '' },
       "phone"           : { type: String, default: '' },
       "attachment"      : { type: String, default: '' },
+      "userType"      : { type: String, default: '' },
       "status"          : { type: Number, index: true, default: 3 }, //{0-pending, 1-completed, 2-cancelled,3-user side pending },
       "date"            : { type: Date, default: Date.now },
   }],

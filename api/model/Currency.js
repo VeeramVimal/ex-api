@@ -29,6 +29,8 @@ var currencySchema = new Schema({
   "transferEnable": { type: Number, default: 0 },
   "perpetualTransferEnable": { type: Number, default: 0 },
   "cryptoLoanTransferEnable": { type: Number, default: 0 },
+  "gamePredictionTransferEnable": { type: Number, default: 0 },
+  "simpleEarnTransferEnable" : { type: Number, default: 0 },
   "stakingTransferEnable": { type: Number, default: 0 },
   "minCurDeposit": { type: Number, default: 0 },
   "minWalletTransfer": { type: Number, default: 0 },

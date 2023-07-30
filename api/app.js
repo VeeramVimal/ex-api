@@ -13,13 +13,12 @@ let webapiRouter = require('./routes/base/webapiRouter');
 
 let config = require("./Config/config");
 let tradeHelper = require('./helpers/trade');
-// let tradeUSDTPerpetualHelper = require('./helpers/tradeUSDTPerpetual');
 let p2pHelper = require('./helpers/p2p');
 let commonHelper = require('./helpers/common');
 let notificationHelper = require("./helpers/notification");
+
 require('./cron/cron.liq');
-require('./cron/cron.loan');
-// let cronUSDTPerpetual = require('./cron/initial.USDTPerpetual');
+require('./cron/cron.p2p');
 
 let port = config.port;
 let app = express();
@@ -59,8 +58,6 @@ const io = require('socket.io')(server, {
 });
 
 tradeHelper.SocketInit(io);
-// tradeUSDTPerpetualHelper.SocketInit(io);
-// cronUSDTPerpetual.SocketInit(io);
 commonHelper.SocketInit(io);
 p2pHelper.SocketInit(io);
 notificationHelper.SocketInit(io);
@@ -73,14 +70,6 @@ io.on('connection', function (socket) {
   socket.on('userEmit', function (data) {
     tradeHelper.userEmit(data, "socket", "");
   });
-
-  // USDT perpetual
-  // socket.on('createOrderUSDTPerpetual', function (data) {
-  //   tradeUSDTPerpetualHelper.createOrder(data, "socket", "");
-  // });
-  // socket.on('userEmitUSDTPerpetual', function (data) {
-  //   tradeUSDTPerpetualHelper.userEmit(data, "socket", "");
-  // });
 
   // P2P
   socket.on('createp2pOrder', function (data) {
@@ -107,19 +96,6 @@ io.on('connection', function (socket) {
       socket.join('Pair-' + data.pairId);
     }
   });
-
-  // socket.on('notification', async (data) => {
-  //   let data1 = await notificationHelper.sendNotification();
-  //   console.log('asgcsacsac=============',data1);
-  //   io.sockets.emit("notification", data1)
-  // });
-
-  // socket.on('user_id', async (userId) => {
-  //   // console.log("userId=========", userId);
-  //   let data1 = await notificationHelper.getUserId(userId);
-  //   console.log("data1====condition======", data1)
-  //   io.sockets.emit("user_id", data1);
-  // });
 
   socket.on('disconnect', () => {
     console.log('A user disconnected');

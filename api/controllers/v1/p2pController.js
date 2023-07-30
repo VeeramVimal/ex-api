@@ -211,10 +211,10 @@ const p2pController = {
                 if (walletOutput) {
                     return res.json({ status: true, message: "User balance", data: walletOutput })
                 } else {
-                    return res.json({ status: true, message: "User balance error", data: { amount: 0 } })
+                    return res.json({ status: true, message: "User balance error", data: { amount: 0, p2pAmount: 0 } })
                 }
             } else {
-                return res.json({ status: true, message: "Currency id error", data: { amount: 0 } })
+                return res.json({ status: true, message: "Currency id error", data: { amount: 0, p2pAmount: 0 } })
             }
         } catch (err) {
             console.log('getBalance', e);
@@ -764,34 +764,110 @@ const p2pController = {
             if (orderwith == -1) {
                 oArray.push(req.userId.toString())
                 setTimeout(_intervalFunc, 5000, req.userId.toString());
-                let myadsStatus = await query_helper.findoneData(P2POrder, { _id: mongoose.Types.ObjectId(req.body.orderId), userId: mongoose.Types.ObjectId(req.userId) }, {});
-                if (myadsStatus.status) {
-                    myadsStatus = myadsStatus.msg;
-                    let fromCurrency = myadsStatus.pairName.split(/[_]+/)[0];
-                    if (myadsStatus.orderType == 'sell') {
-                        let usdtResult = await query_helper.findoneData(CurrencyDb, { currencySymbol: fromCurrency }, { currencyId: 1 });
-                        if (usdtResult.status) {
-                            const balance = await common.getbalance(req.userId, usdtResult.msg.currencyId);
-                            await common.updatep2pAmount(req.userId, usdtResult.msg.currencyId, balance.p2pAmount + myadsStatus.usdtPrice, req.body.orderId, 'P2P - Ads Cancellation');
-                            await common.updatep2pAmountHold(req.userId, usdtResult.msg.currencyId, -(myadsStatus.usdtPrice));
+                let query = {
+                    _id: mongoose.Types.ObjectId(req.body.orderId), 
+                    userId: mongoose.Types.ObjectId(req.userId),
+                    status: 1 
+                };
+                P2POrder.aggregate([
+                    {
+                        $match: query
+                    },
+                    {
+                        $lookup: {
+                          from: 'P2PTransactions',
+                          let: {
+                            orderId: '$_id',
+                          },
+                          pipeline: [
+                            {
+                              $match: {
+                                $expr: {
+                                  $and: [
+                                    { "$eq": ["$orderId", "$$orderId"] },
+                                    { "$eq": ["$status", 3] },
+                                  ]
+                                }
+                              }
+                            },
+                            {
+                              $limit: 1
+                            }
+                          ],
+                          as: "P2PTransactionsDet"
                         }
-                    }
+                    },
+                    {
+                        $project: {
+                            "P2PTransactionsDet":"$P2PTransactionsDet",
+                            "paymentId": "$paymentId",
+                            "paymentmethodId": "$paymentmethodId",
+                            "paymentmethodIdDetail": "$paymentmethodIdDetail",
+                            "paymentNames": "$paymentNames",
+                            "orderType": "$orderType",
+                            "pairId": "$pairId",
+                            "userId": "$userId",
+                            "orderMode": "$orderMode",
+                            "usdtPrice": "$usdtPrice",
+                            "price": "$price",
+                            "country": "$country",
+                            "minAmt": "$minAmt",
+                            "maxAmt": "$maxAmt",
+                            "status": "$status",
+                            "remarks": "$remarks",
+                            "autoreply": "$autoreply",
+                            "timeLimit": "$timeLimit",
+                            "username": "$users.username",
+                            "email": "$users.email",
+                            "createdDate": "$createdDate",
+                            "priceType": "$priceType",
+                            "registeredStatus": "$registeredStatus",
+                            "registeredDays": "$registeredDays",
+                            "holdingStatus": "$holdingStatus",
+                            "holdingBTC": "$holdingBTC",
+                            "pairName": "$pairName"
+                        },
+                    },
+                ]).exec(async function (err, result) {
+                    if (result && result[0]) {
+                        const resultFirst = result[0];
 
-                    await query_helper.updateData(P2POrder, "one", { _id: mongoose.Types.ObjectId(req.body.orderId), userId: mongoose.Types.ObjectId(req.userId) }, { status: 2 })
-                    await common.p2pactivtylog(req.userId,"","", "", 'P2P Ads Deleted','P2P Ads Deleted Successfully!');
+                        if (resultFirst.P2PTransactionsDet && resultFirst.P2PTransactionsDet.length > 0) {
+                            res.json({ "status": true, "message": "Your P2P Ads processing." });
+                        } else {
+                            let fromCurrency = resultFirst.pairName.split(/[_]+/)[0];
+                            if (resultFirst.orderType == 'sell') {
+                                let usdtResult = await query_helper.findoneData(CurrencyDb, { currencySymbol: fromCurrency }, { currencyId: 1 });
+                                if (usdtResult.status) {
+                                    const balance = await common.getbalance(req.userId, usdtResult.msg.currencyId);
+                                    await common.updatep2pAmount(req.userId, usdtResult.msg.currencyId, balance.p2pAmount + resultFirst.usdtPrice, req.body.orderId, 'P2P - Ads Cancellation');
+                                    await common.updatep2pAmountHold(req.userId, usdtResult.msg.currencyId, -(resultFirst.usdtPrice));
+                                }
+                            }
 
-                    let userResult = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(req.userId) }, {});
-                    let userStatus = userResult.msg;
-                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-ad-Deleted' }, {});
-                    if (email_data.status) {
-                        let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, userStatus.username);
-                        mail_helper.sendMail({ subject: email_data.msg.subject, to: userStatus.email, html: etempdataDynamic }, function (res1) {
-                            res.json({ status: true, message: "Ads Deleted Sucessfully" });
-                        });
-                    } else {
-                        res.json({ status: false, message: "Oops! Something went wrong.Please try again" })
+                            await query_helper.updateData(P2POrder, "one", { _id: mongoose.Types.ObjectId(req.body.orderId), userId: mongoose.Types.ObjectId(req.userId) }, { status: 2 })
+                            await common.p2pactivtylog(req.userId,"","", req.body.orderId, 'P2P Ads Deleted','P2P Ads Deleted Successfully!');
+
+                            let userResult = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(req.userId) }, {});
+                            let userStatus = userResult.msg;
+                            let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-ad-Deleted' }, {});
+                            if (email_data.status) {
+                                let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, userStatus.username);
+                                mail_helper.sendMail({ subject: email_data.msg.subject, to: userStatus.email, html: etempdataDynamic }, function (res1) {
+                                    return res.json({ status: true, message: "Ads Deleted Sucessfully" });
+                                });
+                            } else {
+                                return res.json({ status: true, message: "Ads Deleted Sucessfully" });
+                            }
+                            // res.json({ "status": true, "message": "Ads Deleted Sucessfully", data: result, total: 0 });
+                        }
+                    } else if (result && !result[0]) {
+                        res.json({ "status": false, "message": "Order not found" });
                     }
-                }
+                    else {
+                        res.json({ "status": false, "message": "Something went wrong! Please try again some other time" });
+                    }
+                });               
             } else {
                 setTimeout(_intervalFunc, 5000, req.userId.toString());
                 res.json({ status: false, message: "Please wait for 5 seconds before placing another request!" });
@@ -865,31 +941,35 @@ const p2pController = {
                                         res.json({ status: false, message: "This pair is De-Activated"});
                                         return false;
                                     }
-                                    if (pairList.minTrade > Number(data.minAmt)) {
-                                        res.json({ status: false, message: "Min limit should not be less than " + pairList.minTrade + " " + toCurrency});
-                                        return false;
-                                    }
-                                    if (pairList.maxTrade < Number(data.maxAmt)) {
-                                        res.json({ status: false, message: "Max order limit " + pairList.maxTrade + " " + toCurrency});
-                                        return false;
-                                    }
-                                    if ((Number(data.maxAmt) < Number(data.minAmt))) {
-                                        res.json({ status: false, message: "Max order should not be less than min amount"});
-                                        return false;
-                                    }
-
-                                    data.timeLimit = (timeLimit != 15 && timeLimit != 30 && timeLimit != 45) ? (timeLimit * 60) : timeLimit;
-                                    await query_helper.updateData(P2POrder, "one", { _id: mongoose.Types.ObjectId(orderId) }, data);
-                                    await common.p2pactivtylog(req.userId," "," ", orderResult._id, 'P2P Ads Updated','P2P Ads Updated Successfully!');
-                                    res.json({ status: true, message: "Ads Updated Sucessfully" });
-                                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-ad-updated' }, {});
-                                    if (email_data.status) {
-                                        let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, reqUserData.username).replace(/###AMOUNT###/g, common.roundValuesMail(+orderResult.msg.orderAmount, 8)).replace(/###TYPE###/g, orderResult.msg.orderType);
-                                        mail_helper.sendMail({ subject: email_data.msg.subject, to: reqUserData.email, html: etempdataDynamic }, function (res1) {
-                                            console.error("Ads Updated Sucessfully");
-                                        });
+                                    if (Number(data.price) > 0) {
+                                        if (pairList.minTrade > Number(data.minAmt)) {
+                                            res.json({ status: false, message: "Min limit should not be less than " + pairList.minTrade + " " + toCurrency});
+                                            return false;
+                                        }
+                                        if (pairList.maxTrade < Number(data.maxAmt)) {
+                                            res.json({ status: false, message: "Max order limit " + pairList.maxTrade + " " + toCurrency});
+                                            return false;
+                                        }
+                                        if ((Number(data.maxAmt) < Number(data.minAmt))) {
+                                            res.json({ status: false, message: "Max order should not be less than min amount"});
+                                            return false;
+                                        }
+    
+                                        data.timeLimit = (timeLimit != 15 && timeLimit != 30 && timeLimit != 45) ? (timeLimit * 60) : timeLimit;
+                                        await query_helper.updateData(P2POrder, "one", { _id: mongoose.Types.ObjectId(orderId) }, data);
+                                        await common.p2pactivtylog(req.userId," "," ", orderResult._id, 'P2P Ads Updated','P2P Ads Updated Successfully!');
+                                        res.json({ status: true, message: "Ads Updated Sucessfully" });
+                                        let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-ad-updated' }, {});
+                                        if (email_data.status) {
+                                            let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, reqUserData.username).replace(/###AMOUNT###/g, common.roundValuesMail(+orderResult.msg.orderAmount, 8)).replace(/###TYPE###/g, orderResult.msg.orderType);
+                                            mail_helper.sendMail({ subject: email_data.msg.subject, to: reqUserData.email, html: etempdataDynamic }, function (res1) {
+                                                console.error("Ads Updated Sucessfully");
+                                            });
+                                        } else {
+                                            console.error('Oops! Something went wrong.Please try again');
+                                        }
                                     } else {
-                                        console.error('Oops! Something went wrong.Please try again');
+                                        res.json({ status: false, message: "Please enter the your price or please refresh this page!" })
                                     }
                                 } else {
                                     res.json({ status: false, message: "Invalid pair" })
@@ -931,95 +1011,100 @@ const p2pController = {
                                             return false;
                                         }
                                         let data = passData;
-                                        if (pairList.minTrade > Number(data.maxAmt)) {
-                                            res.json({ status: false, message: "Min limit should not be less than " + pairList.minTrade + " " + toCurrency});
-                                            return false;
-                                        }
-                                        if (pairList.maxTrade < Number(data.maxAmt)) {
-                                            res.json({ status: false, message: "Max order limit " + pairList.maxTrade + " " + toCurrency});
-                                            return false;
-                                        }
-                                        if (data.registeredStatus == true && (data.registeredDays == "" || data.registeredDays == undefined || typeof data.registeredDays == "undefined")) {
-                                            res.json({ status: false, message: "Please enter the registered time limit" });
-                                            return false;
-                                        } 
-                                        if (data.holdingStatus == true && (data.holdingBTC == "" || data.holdingBTC == undefined || typeof data.holdingBTC == "undefined")) {
-                                            res.json({ status: false, message: "Please enter holdings" });
-                                            return false;
-                                        } 
-                                        if (data.holdingStatus == true && (data.holdingBTC == 0)) {
-                                            res.json({ status: false, message: "Holdings more than 0" });
-                                            return false;
-                                        } 
-                                        let settingsData = await query_helper.findoneData(P2PSettings, {}, {})
-                                        if (settingsData.status) {
-                                            settingsData = settingsData.msg;
-                                            if (data.registeredStatus == true && ((settingsData.registeredDays) < data.registeredDays)) {
-                                                return res.json({ status: false, message: "The days must not exceed "+ settingsData.registeredDays});
+                                        if (Number(data.price) > 0) {
+                                            if (pairList.minTrade > Number(data.maxAmt)) {
+                                                res.json({ status: false, message: "Min limit should not be less than " + pairList.minTrade + " " + toCurrency});
+                                                return false;
                                             }
-                                        }
-                                        let fromCurrencyDet = await query_helper.findoneData(CurrencyDb, { currencySymbol: fromCurrency }, { });
-                                        if (fromCurrencyDet.status) {
-                                            fromCurrencyDet = fromCurrencyDet.msg;
-                                            if (data.holdingStatus == true && (fromCurrencyDet.p2pHoldingPrice < data.holdingBTC)) {
-                                                return res.json({ status: false, message: "Holdings must not exceed "+ settingsData.registeredDays + " "+ fromCurrency});
+                                            if (pairList.maxTrade < Number(data.maxAmt)) {
+                                                res.json({ status: false, message: "Max order limit " + pairList.maxTrade + " " + toCurrency});
+                                                return false;
                                             }
-                                        }
-                                        data.timeLimit = (timeLimit != 15 && timeLimit != 30 && timeLimit != 45) ? (timeLimit * 60) : timeLimit;
-                                        data.paymentNames = paymentNames.toString();
-                                        if (orderType == 'buy') {
-                                            data.paymentmethodId = paymentId;
-                                        } else {
-                                            data.paymentId = paymentId;
-                                        }
-                                        let pairStatus = await query_helper.findoneData(P2POrder, { _id: mongoose.Types.ObjectId(data.pairId) }, {});
-                                        if (!pairStatus.status) {
-                                            let returnId = '';
-                                            if (orderType == 'sell') {
-                                                let usdtResult = await query_helper.findoneData(CurrencyDb, { currencySymbol: fromCurrency }, { currencyId: 1 });
-                                                if (usdtResult.status) {
-                                                    const balance = await common.getbalance(reqBody.userId, usdtResult.msg.currencyId);
-                                                    if (balance.p2pAmount >= data.usdtPrice) {
-                                                        returnId = await common.updatep2pAmount(reqBody.userId, usdtResult.msg.currencyId, balance.p2pAmount - data.usdtPrice, '', 'P2P - Ads Creation');
-                                                        await common.updatep2pAmountHold(reqBody.userId, usdtResult.msg.currencyId, +(data.usdtPrice));
-                                                    } else {
-                                                        res.json({ status: false, message: "You don't have enough balance to place order" });
-                                                        return false;
+                                            if (data.registeredStatus == true && (data.registeredDays == "" || data.registeredDays == undefined || typeof data.registeredDays == "undefined")) {
+                                                res.json({ status: false, message: "Please enter the registered time limit" });
+                                                return false;
+                                            } 
+                                            if (data.holdingStatus == true && (data.holdingBTC == "" || data.holdingBTC == undefined || typeof data.holdingBTC == "undefined")) {
+                                                res.json({ status: false, message: "Please enter holdings" });
+                                                return false;
+                                            } 
+                                            if (data.holdingStatus == true && (data.holdingBTC == 0)) {
+                                                res.json({ status: false, message: "Holdings more than 0" });
+                                                return false;
+                                            } 
+                                            let settingsData = await query_helper.findoneData(P2PSettings, {}, {})
+                                            if (settingsData.status) {
+                                                settingsData = settingsData.msg;
+                                                if (data.registeredStatus == true && ((settingsData.registeredDays) < data.registeredDays)) {
+                                                    return res.json({ status: false, message: "The days must not exceed "+ settingsData.registeredDays});
+                                                }
+                                            }
+                                            let fromCurrencyDet = await query_helper.findoneData(CurrencyDb, { currencySymbol: fromCurrency }, { });
+                                            if (fromCurrencyDet.status) {
+                                                fromCurrencyDet = fromCurrencyDet.msg;
+                                                if (data.holdingStatus == true && (fromCurrencyDet.p2pHoldingPrice < data.holdingBTC)) {
+                                                    return res.json({ status: false, message: "Holdings must not exceed "+ settingsData.registeredDays + " "+ fromCurrency});
+                                                }
+                                            }
+                                            data.kycStatus = data.checkedKyc;
+                                            data.timeLimit = (timeLimit != 15 && timeLimit != 30 && timeLimit != 45) ? (timeLimit * 60) : timeLimit;
+                                            data.paymentNames = paymentNames.toString();
+                                            if (orderType == 'buy') {
+                                                data.paymentmethodId = paymentId;
+                                            } else {
+                                                data.paymentId = paymentId;
+                                            }
+                                            let pairStatus = await query_helper.findoneData(P2POrder, { _id: mongoose.Types.ObjectId(data.pairId) }, {});
+                                            if (!pairStatus.status) {
+                                                let returnId = '';
+                                                if (orderType == 'sell') {
+                                                    let usdtResult = await query_helper.findoneData(CurrencyDb, { currencySymbol: fromCurrency }, { currencyId: 1 });
+                                                    if (usdtResult.status) {
+                                                        const balance = await common.getbalance(reqBody.userId, usdtResult.msg.currencyId);
+                                                        if (balance.p2pAmount >= data.usdtPrice) {
+                                                            returnId = await common.updatep2pAmount(reqBody.userId, usdtResult.msg.currencyId, balance.p2pAmount - data.usdtPrice, '', 'P2P - Ads Creation');
+                                                            await common.updatep2pAmountHold(reqBody.userId, usdtResult.msg.currencyId, +(data.usdtPrice));
+                                                        } else {
+                                                            res.json({ status: false, message: "You don't have enough balance to place order" });
+                                                            return false;
+                                                        }
                                                     }
                                                 }
-                                            }
-                                            data.orderAmount = data.usdtPrice;
-                                            let payment = await query_helper.insertData(P2POrder, data);
-                                            if (payment.status) {
-                                                let activity = common.activity(req);
-                                                activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
-                                                let userActData = await query_helper.findoneData(P2PActivityLog, { userId: req.userId, ip: activity.ip, type: "P2P Ads Created" }, {})
-                                                if (!userActData.status) {
-                                                    common.userNotify({
-                                                        userId: req.userId,
-                                                        reason: 'P2P Ads Created',
-                                                        activity,
-                                                        detail: {
-                                                           adsId : payment.msg._id
-                                                        }
+                                                data.orderAmount = data.usdtPrice;
+                                                let payment = await query_helper.insertData(P2POrder, data);
+                                                if (payment.status) {
+                                                    let activity = common.activity(req);
+                                                    activity.browser = (typeof activity.browser == 'string') ? activity.browser : '';
+                                                    let userActData = await query_helper.findoneData(P2PActivityLog, { userId: req.userId, ip: activity.ip, type: "P2P Ads Created" }, {})
+                                                    if (!userActData.status) {
+                                                        common.userNotify({
+                                                            userId: req.userId,
+                                                            reason: 'P2P Ads Created',
+                                                            activity,
+                                                            detail: {
+                                                               adsId : payment.msg._id
+                                                            }
+                                                        });
+                                                    }
+                                                    await common.p2pactivtylog(req.userId," "," ", payment.msg._id, 'P2P Ads Created','P2P Ads Created Successfully!');
+                                                    if (returnId != '') {
+                                                        await common.updatp2peBalanceUpdationId(returnId, payment.msg._id);
+                                                    }
+                                                }
+                                                let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-ad-created' }, {});
+                                                if (email_data.status) {
+                                                    let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, reqUserData.username);
+                                                    mail_helper.sendMail({ subject: email_data.msg.subject, to: reqUserData.email, html: etempdataDynamic }, function (res1) {
+                                                        res.json({ status: true, message: "Verified successfully", data: payment })
                                                     });
+                                                } else {
+                                                    res.json({ status: false, message: "Oops! Something went wrong.Please try again" })
                                                 }
-                                                await common.p2pactivtylog(req.userId," "," ", payment.msg._id, 'P2P Ads Created','P2P Ads Created Successfully!');
-                                                if (returnId != '') {
-                                                    await common.updatp2peBalanceUpdationId(returnId, payment.msg._id);
-                                                }
-                                            }
-                                            let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-ad-created' }, {});
-                                            if (email_data.status) {
-                                                let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, reqUserData.username);
-                                                mail_helper.sendMail({ subject: email_data.msg.subject, to: reqUserData.email, html: etempdataDynamic }, function (res1) {
-                                                    res.json({ status: true, message: "Verified successfully", data: payment })
-                                                });
                                             } else {
-                                                res.json({ status: false, message: "Oops! Something went wrong.Please try again" })
+                                                res.json({ status: false, message: "Invalid 2FA Code" })
                                             }
                                         } else {
-                                            res.json({ status: false, message: "Invalid 2FA Code" })
+                                            res.json({ status: false, message: "Please enter the your price" })
                                         }
                                     } else {
                                         return res.json({ status: false, message: "Invalid pair" });
@@ -1608,6 +1693,7 @@ const p2pController = {
                 {
                     $match: {
                         _id: mongoose.Types.ObjectId(req.body.editId),
+                        usdtPrice: { $gt: 0 },
                         status: 1
                     }
                 },
@@ -2011,7 +2097,8 @@ const p2pController = {
                         res.json({ "status": false, "message": 'Not an valid request', type: 0 });
                         return false;
                     }
-                    await query_helper.updateData(P2PTransactions, "one", { orderNo: reqBody.orderNo }, { status: 1, verifyStep: 4 });
+                    await p2pHelper.p2pOrderClose({orderId: checkTxn.orderId});
+                    await query_helper.updateData(P2PTransactions, "one", { orderNo: reqBody.orderNo }, { status: 1, verifyStep: 4, orderReleasedDate: new Date() });
                     await query_helper.updateData(P2PAppealHistory, "one", { orderNo: reqBody.orderNo }, { status: 2 });
                     let where = checkTxn.pairId != '' ? { _id: mongoose.Types.ObjectId(checkTxn.pairId) } : {};
                     let pairs = await P2PPair.findOne(where).sort({ _id: 1 }).populate("fromCurrency").populate("toCurrency");
@@ -2027,18 +2114,20 @@ const p2pController = {
                                     buyerDetails = buyerDetails.msg;
                                     let newbal = (+walletOutput.p2pAmount) + (+checkTxn.totalPrice);
                                     let smsTemplate = "[ Exchange ] P2P Order "+ reqBody.orderNo.slice(- 4) + " has been completed.The seller has released "+ checkTxn.totalPrice + " "+ fromCurrency.currencySymbol +" to your P2P wallet"
+                                    let mailTemplatenew = "P2P Order "+ reqBody.orderNo.slice(- 4) + " has been completed.The seller has released "+ checkTxn.totalPrice + " "+ fromCurrency.currencySymbol +" to your P2P wallet"
                                     await common.updatep2pAmount(buyerUser, fromCurrency.currencyId, newbal, reqBody.orderNo, 'P2P - Completion');
                                     if( checkTxn.orderType == 'sell'){
                                         await common.updatep2pAmountHold(checkTxn.sellerUserId,  fromCurrency.currencyId, -(checkTxn.totalPrice));
                                     } 
                                     await common.mobileSMS(buyerDetails.phoneno, smsTemplate, {section: "p2p"});
                                     await common.p2pactivtylog(req.userId, checkTxn.ownerId, checkTxn.orderNo, checkTxn.orderId, 'Order released', checkTxn.totalPrice + " "+ fromCurrency.currencySymbol + " " + (checkTxn.orderType) + ' Order released successfully');
-                                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-released' }, {});
+                                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-released-new' }, {});
                                     if (email_data.status) {
                                         let username = buyerDetails.username != "" ? (buyerDetails.username) : (buyerDetails.email != "" ? buyerDetails.email : buyerDetails.phoneno);
                                         let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, username).replace(/###AMOUNT###/g, common.roundValuesMail(+checkTxn.totalPrice, 8));
+                                        let p2porderrelasedetempdata = email_data.msg.content.replace(/###USERNAME###/g, username).replace(/###CONTENT###/g, mailTemplatenew).replace(/###ORDERLINK###/g, config.frontEnd + 'order-details/' + reqBody.orderNo);
                                         res.json({ status: true, message: "Order released successfully", data: checkTxn, type: 0 });
-                                        mail_helper.sendMail({ subject: email_data.msg.subject, to: buyerDetails.email, html: etempdataDynamic }, function (res1) {
+                                        mail_helper.sendMail({ subject: email_data.msg.subject, to: buyerDetails.email, html: p2porderrelasedetempdata }, function (res1) {
                                         });
                                     } else {
                                         res.json({ status: false, message: "Something went wrong! Please try again someother time", type: 0 });
@@ -2127,6 +2216,7 @@ const p2pController = {
                                                     buyerDetails = buyerDetails.msg;
                                                     let newbal = (+walletOutput.p2pAmount) + (+checkTxn.totalPrice);
                                                     let smsTemplate = "[ Exchange ] P2P Order "+ reqBody.orderNo.slice(- 4) + " has been completed.The seller has released "+ checkTxn.totalPrice + " "+ fromCurrency.currencySymbol +" to your P2P wallet"
+                                                    let mailTemplatenew = "P2P Order "+ reqBody.orderNo.slice(- 4) + " has been completed.The seller has released "+ checkTxn.totalPrice + " "+ fromCurrency.currencySymbol +" to your P2P wallet"
                                                     await common.updatep2pAmount(buyerUser, fromCurrency.currencyId, newbal, reqBody.orderNo, 'P2P - Completion');
                                                     if( checkTxn.orderType == 'sell'){
                                                         await common.updatep2pAmountHold(checkTxn.sellerUserId,  fromCurrency.currencyId, -(checkTxn.totalPrice));
@@ -2141,12 +2231,13 @@ const p2pController = {
                                                     }
                                                     await common.mobileSMS(buyerDetails.phoneno, smsTemplate, {section: "p2p"});
                                                     await common.p2pactivtylog(req.userId, checkTxn.ownerId, checkTxn.orderNo, checkTxn.orderId, 'Order released', checkTxn.totalPrice + " "+ fromCurrency.currencySymbol + " " + (checkTxn.orderType) + ' Order released successfully');
-                                                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-released' }, {});
+                                                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-released-new' }, {});
                                                     if (email_data.status) {
                                                         let username = buyerDetails.username != "" ? (buyerDetails.username) : (buyerDetails.email != "" ? buyerDetails.email : buyerDetails.phoneno);
                                                         let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, username).replace(/###AMOUNT###/g, common.roundValuesMail(+checkTxn.totalPrice, 8));
+                                                        let p2porderrelasedetempdata = email_data.msg.content.replace(/###USERNAME###/g, username).replace(/###CONTENT###/g, mailTemplatenew).replace(/###ORDERLINK###/g, config.frontEnd + 'order-details/' + reqBody.orderNo);
                                                         res.json({ status: true, message: "Order released successfully", data: checkTxn, type: 0 });
-                                                        mail_helper.sendMail({ subject: email_data.msg.subject, to: buyerDetails.email, html: etempdataDynamic }, function (res1) {
+                                                        mail_helper.sendMail({ subject: email_data.msg.subject, to: buyerDetails.email, html: p2porderrelasedetempdata }, function (res1) {
                                                         });
                                                     } else {
                                                         res.json({ status: false, message: "Something went wrong! Please try again someother time", type: 0 });
@@ -2204,7 +2295,7 @@ const p2pController = {
                                     await query_helper.updateData(P2PTransactions, "one", { orderNo: reqBody.orderNo }, reqData);
                                     await common.p2pactivtylog(req.userId, checkTxn.ownerId, checkTxn.orderNo, checkTxn.orderId, ' Order Marked as paid', (checkTxn.orderType) == 'buy' ? "Sell " : "Buy " +'Order Marked as paid');
                                     let activity = common.activity(req);
-                                    activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
+                                    activity.browser = (typeof activity.browser == 'string') ? activity.browser : '';
                                     common.userNotify({
                                         userId: req.userId,
                                         reason: 'P2P Order Paid',
@@ -2216,8 +2307,18 @@ const p2pController = {
                                         }
                                     });
                                     let smsTemplate = "[ Exchange ] The buyer has marked P2P Order "+ reqBody.orderNo.slice(- 4) + " as paid.Please release the crypto ASAP after confirming that payment has been received."
+                                    let mailTemplatenew = "The buyer has marked P2P Order "+ reqBody.orderNo.slice(- 4) + " as paid.Please release the crypto ASAP after confirming that payment has been received."
                                     await common.mobileSMS(sellerDetails.phoneno, smsTemplate, {section: "p2p"});
-                                    return res.json({ "status": true, "message": 'Order Marked as paid', data: checkTxn, type: 0 });
+                                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-marked-paid' }, {});                                    
+                                    if (email_data.status) {
+                                        let username = sellerDetails.username != "" ? (sellerDetails.username) : (sellerDetails.email != "" ? sellerDetails.email : sellerDetails.phoneno);
+                                        let p2pordermarkedetempdata = email_data.msg.content.replace(/###USERNAME###/g, username).replace(/###CONTENT###/g, mailTemplatenew).replace(/###ORDERLINK###/g, config.frontEnd + 'order-details/' + reqBody.orderNo);
+                                        res.json({ "status": true, "message": 'Order Marked as paid', data: checkTxn, type: 0 });
+                                        mail_helper.sendMail({ subject: email_data.msg.subject, to: sellerDetails.email, html: p2pordermarkedetempdata }, function (res1) {
+                                        });
+                                    } else {
+                                        res.json({ status: false, message: "Something went wrong! Please try again someother time", type: 0 });
+                                    }
                                 } else {
                                     return res.json({ status: false, message: "Please try again after sometime!", type: 0 })
                                 }
@@ -2297,7 +2398,7 @@ const p2pController = {
                                                         if (walletOutput) {
                                                             if (walletOutput.p2pAmount >= reqBody.totalPrice) {
                                                                 let newbal = (+walletOutput.p2pAmount) - (+reqBody.totalPrice);
-                                                                returnId = await common.updatep2pAmount(sellerUser, fromCurrency.currencyId, newbal, '', 'P2P - Completion');
+                                                                returnId = await common.updatep2pAmount(sellerUser, fromCurrency.currencyId, newbal, '', 'P2P - Order marked');
                                                                 await common.updatep2pAmountHold(sellerUser,  fromCurrency.currencyId, +(reqBody.totalPrice));
                                                             } else {
                                                                 res.json({ status: false, message: "You don't have enough balance to place order", type: 0 });
@@ -2320,17 +2421,27 @@ const p2pController = {
                                                             chattingHistory: {
                                                                 userId: req.userId,
                                                                 message: orderData.autoreply,
-                                                                chattingImage: ""
+                                                                chattingImage: "",
+                                                                userType: "user"
                                                             }
                                                         }
                                                     }
                                                     await query_helper.updateData(P2PTransactions, "one", { _id: mongoose.Types.ObjectId(payment._id) }, data);
-                                                    await common.p2pactivtylog(req.userId, req.body.ownerId," ", orderData._id, 'Create Order',(req.body.orderType == 'buy' ? 'Buy' : 'Sell') + ' Order has been created');
+                                                    await common.p2pactivtylog(req.userId, req.body.ownerId," ", orderData._id, 'Create Order',(req.body.orderType == 'buy' ? 'Buy' : 'Sell') + ' Ads has been created');
                                                     let result = await query_helper.updateData(P2POrder, "one", { _id: mongoose.Types.ObjectId(orderData._id) }, { usdtPrice: newval });
                                                     if (result) {
-                                                        let smsTemplate = "[ Exchange ] P2P Order "+ payment.orderNo.slice(- 4) + " has been placed successfully."
+                                                        let smsTemplate = "Successfully place an order."
                                                         await common.mobileSMS(userDetails.phoneno, smsTemplate, {section: "p2p"});
-                                                        res.json({ status: true, message: "Successfully place an order", data: payment , type: 0});
+                                                        let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-place-order' }, {});
+                                                        if (email_data.status) {
+                                                            let username = userDetails.username != "" ? (userDetails.username) : (userDetails.email != "" ? userDetails.email : userDetails.phoneno);
+                                                            let p2pplaceOrderetempdata = email_data.msg.content.replace(/###USERNAME###/g, username).replace(/###CONTENT###/g, smsTemplate).replace(/###ORDERLINK###/g, config.frontEnd + 'order-details/' + payment.orderNo);
+                                                            res.json({ status: true, message: smsTemplate, data: payment , type: 0});
+                                                            mail_helper.sendMail({ subject: email_data.msg.subject, to: userDetails.email, html: p2pplaceOrderetempdata }, function (res1) {
+                                                            });
+                                                        } else {
+                                                            res.json({ status: false, message: "Something went wrong! Please try again someother time", type: 0 });
+                                                        }
                                                     } else {
                                                         res.json({ status: false, message: "Something went wrong! Please try again someother time", type: 0 });
                                                     }
@@ -2770,6 +2881,24 @@ const p2pController = {
                     }
                 },
                 {
+                    $lookup: {
+                        from: 'Users',
+                        let: {
+                            userId: '$appealHistory.userId'
+                        },
+                        pipeline: [
+                            {
+                                $match: {
+                                    $expr: {
+                                        "$in": ["$_id", "$$userId"],
+                                    }
+                                }
+                            }
+                        ],
+                        as: 'appealUsersDet'
+                    }
+                },
+                {
                     $lookup:
                     {
                         from: 'Users',
@@ -2781,6 +2910,7 @@ const p2pController = {
                 { $unwind: "$userDet" },
                 {
                     $project: {
+                        "appealUsersDet": "$appealUsersDet",
                         "userName": "$userDet.username",
                         "userEmail": "$userDet.email",
                         "user_ID": "$userDet._id",
@@ -2844,12 +2974,12 @@ const p2pController = {
                                     let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, name).replace(/###supportMessage###/g, reqBody.supportMessage);
                                     mail_helper.sendMail({ subject: email_data.msg.subject, to: email, html: etempdataDynamic }, function (res1) {
                                     });
-                                    res.json({ status: true, message: "Support Message Sented Successfully", data: result })
+                                    res.json({ status: true, message: "Support Message Sent Successfully", data: result })
                                 } else {
                                     res.json({ status: false, message: "Not valid admin" })
                                 }
                             } else {
-                                res.json({ status: false, message: "Support Message Sented Failed" })
+                                res.json({ status: false, message: "Support Message Sent Failed" })
                             }
                     } else {
                         let result = await P2PAppealHistory.findOneAndUpdate({ orderNo: reqBody.orderNo}, { $set:  data  }, { new: true });
@@ -2862,12 +2992,12 @@ const p2pController = {
                                     let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, name).replace(/###supportMessage###/g, reqBody.supportMessage);
                                     mail_helper.sendMail({ subject: email_data.msg.subject, to: email, html: etempdataDynamic }, function (res1) {
                                     });
-                                    res.json({ status: true, message: "Support Message Sented Successfully", data: result })
+                                    res.json({ status: true, message: "Support Message Sent Successfully", data: result })
                                 } else {
                                     res.json({ status: false, message: "Not valid admin" })
                                 }
                             } else {
-                                res.json({ status: false, message: "Support Message Sented Failed" })
+                                res.json({ status: false, message: "Support Message Sent Failed" })
                             }
                     }
                 } else {
@@ -2891,6 +3021,7 @@ const p2pController = {
                         description: reqBody.description,
                         phone: reqBody.phone,
                         attachment: reqBody.attachment,
+                        userType: "user",
                     }
                 }
             } else {
@@ -2901,6 +3032,7 @@ const p2pController = {
                         userId: reqBody.userId,
                         description: reqBody.description,
                         phone: reqBody.phone,
+                        userType: "user",
                     }
                 }
             }
@@ -3212,520 +3344,6 @@ const p2pController = {
         } catch(err) {}
     },
     // admin panel
-    async getallTransactions(req,res) {
-        try {
-            let query = {};
-            let getdata = req.body.formvalue;
-            let sort = { createdDate: -1 };
-            if (getdata) {
-                
-                if (getdata.fromdate != '' && getdata.todate!='') {
-                    var fromDate= new Date(getdata.fromdate);
-                    var toDate = new Date(getdata.todate);
-                    var dateFilter= new Date(fromDate.setTime(fromDate.getTime() + 5.5*60*60*1000));
-                    var nextDateFilter = new Date(toDate.setTime(toDate.getTime() + 29.49*60*60*1000));
-                    query.createdDate = {
-                        "$gte":dateFilter,
-                        "$lt":nextDateFilter
-                    }
-                }
-
-                if (getdata.searchQuery != '') {
-                    let userMatchQ = { '$and': [{ '$or': [{ "username": { $regex: getdata.searchQuery } }, { "email": { $regex: getdata.searchQuery } }] }] };
-                    let users = await query_helper.findData(Users, userMatchQ, { _id: 1 }, {}, 0, 1)
-                    let userIds = [];
-                    if (users.status && users.msg.length > 0) {
-                        users.msg.forEach(function (item) {
-                            userIds.push(item._id);
-                        });
-                    }
-                    if (userIds.length > 0) {
-                        query.userId = { $in: userIds };
-                    } else {
-                        query.searchQuery = '';
-                    }
-                }
-
-                if (getdata.type != '') {
-                    query.orderType = getdata.type;
-                }
-
-                if (getdata.orderNo != '') {
-                    query.orderNo = getdata.orderNo;
-                }
-
-                if (getdata.status != '') {
-                    query.status = getdata.status == "processing" ? 3 : getdata.status == "completed" ? 1 : 2 ;
-                }
-            }
-           
-            let limit = req.body.limit ? parseInt(req.body.limit) : 10;
-            let offset = req.body.offset? parseInt(req.body.offset) : 0;
-
-            let ordercount= await P2PTransactions.find(query).countDocuments();
-            P2PTransactions.aggregate([
-                {
-                    $match: query
-                },
-                { "$sort": sort },
-                { "$limit": offset+ limit },
-                { "$skip": offset },
-                {
-                    $lookup:
-                    {
-                        from: 'Users',
-                        localField: 'buyerUserId',
-                        foreignField: '_id',
-                        as: 'buyerDet'
-                    }
-                },
-                { $unwind: "$buyerDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'Users',
-                        localField: 'sellerUserId',
-                        foreignField: '_id',
-                        as: 'sellerDet'
-                    }
-                },
-                { $unwind: "$sellerDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'P2PPair',
-                        localField: 'pairId',
-                        foreignField: '_id',
-                        as: 'pairDet'
-                    }
-                },
-                { $unwind: "$pairDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'Currency',
-                        localField: 'pairDet.fromCurrency',
-                        foreignField: '_id',
-                        as: 'fromCurrency'
-                    }
-                },
-                { $unwind: "$fromCurrency" },
-                {
-                    $lookup:
-                    {
-                        from: 'Currency',
-                        localField: 'pairDet.toCurrency',
-                        foreignField: '_id',
-                        as: 'toCurrency'
-                    }
-                },
-                { $unwind: "$toCurrency" },
-                {
-                    $project: {
-                        "pairDet": "$pairDet",
-                        "fromCurrencyId": "$fromCurrency._id",
-                        "fromCurrency": "$fromCurrency.currencySymbol",
-                        "toCurrency": "$toCurrency.currencySymbol",
-                        "toCurrencyId": "$toCurrency._id",
-                        "buyerName": "$buyerDet.username",
-                        "buyerEmail": "$buyerDet.email",
-                        "sellerName": "$sellerDet.username",
-                        "sellerEmail": "$sellerDet.email",
-                        "paymentId": "$paymentId",
-                        "buyerUserId": "$buyerUserId",
-                        "sellerUserId": "$sellerUserId",
-                        "paymentEndDate": "$paymentEndDate",
-                        "orderNo": "$orderNo",
-                        "orderType": "$orderType",
-                        "pairId": "$pairId",
-                        "totalPrice": "$totalPrice",
-                        "price": "$price",
-                        "status": "$status",
-                        "orderLimit": "$orderLimit",
-                        "createdDate": "$createdDate",
-                    },
-                },
-            ]).exec(async function (err, result) {
-                if (result) {
-                    res.json({ "status": true, "message": "Order details listed", data: result, total: ordercount });
-                } else {
-                    res.json({ "status": false, "message": "Something went wrong! Please try again someother time", total: 0 });
-                }
-            });
-        } catch (err) {
-            console.log("err:",err)
-            res.json({ "status": false, "message": "Something went wrong! Please try again someother time", total: 0 });
-        }
-    },
-    async getallAppealDetails(req,res) {
-        try {
-            let query = {};
-            let getdata = req.body.formvalue;
-            let sort = { createdDate: -1 };
-            if (getdata) {
-                if(getdata.fromdate != '' && getdata.todate!=''){
-                    var fromDate= new Date(getdata.fromdate);
-                    var toDate = new Date(getdata.todate);
-                    var dateFilter= new Date(fromDate.setTime(fromDate.getTime() + 5.5*60*60*1000));
-                    var nextDateFilter = new Date(toDate.setTime(toDate.getTime() + 29.49*60*60*1000));
-                    query.createdDate = {
-                        "$gte":dateFilter,
-                        "$lt":nextDateFilter
-                    }
-                }
-                if (getdata.status != '') {
-                    query.status = Number(getdata.status);
-                }
-                if (getdata.orderNo != '') {
-                    query.orderNo = getdata.orderNo;
-                }
-            }
-            let limit =req.body.limit?parseInt(req.body.limit):10;
-            let offset =req.body.offset? parseInt(req.body.offset):0
-            let ordercount= await P2PAppealHistory.find(query).countDocuments();
-            P2PAppealHistory.aggregate([
-                {
-                    $match: query
-                },
-                { "$sort": sort },
-                { "$limit": offset+ limit },
-                { "$skip": offset },
-                {
-                    $lookup:
-                    {
-                        from: 'Users',
-                        localField: 'userId',
-                        foreignField: '_id',
-                        as: 'appealCreatorDet'
-                    }
-                },
-                { $unwind: "$appealCreatorDet" },
-                {
-                    $project: {
-                        "appealCreatorEmail": "$appealCreatorDet.email",
-                        "appealCreatorUserName": "$appealCreatorDet.username",
-                        "appealCreatorDet" : "$appealCreatorDet",
-                        "appealHistory": "$appealHistory",
-                        "userId": "$userId",
-                        "orderNo": "$orderNo",
-                        "appealCode": "$appealCode",
-                        "reason": "$reason",
-                        "helpseller": "$helpseller",
-                        "helpbuyer": "$helpbuyer",
-                        "status": "$status",
-                        "createdDate": "$createdDate",
-                    },
-                },
-            ]).exec(async function (err, result) {
-                if (result) {
-                    res.json({ "status": true, "message": "Appeal details listed", data: result, total: ordercount });
-                } else {
-                    res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
-                }
-            });
-        } catch (err) {}
-    },
-    async getTransactionHistoryDetails(req,res) {
-        try {
-            let query = {};
-            let sort = { createdDate: -1 }
-            query = {_id: mongoose.Types.ObjectId(req.body._id) };
-            P2PTransactions.aggregate([
-                {
-                    $match: query
-                },
-                { "$sort": sort },
-                {
-                    $lookup:
-                    {
-                        from: 'Users',
-                        localField: 'buyerUserId',
-                        foreignField: '_id',
-                        as: 'buyerDet'
-                    }
-                },
-                { $unwind: "$buyerDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'Users',
-                        localField: 'sellerUserId',
-                        foreignField: '_id',
-                        as: 'sellerDet'
-                    }
-                },
-                { $unwind: "$sellerDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'P2POrder',
-                        localField: 'orderId',
-                        foreignField: '_id',
-                        as: 'orderDet'
-                    }
-                },
-                { $unwind: "$orderDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'P2PPair',
-                        localField: 'pairId',
-                        foreignField: '_id',
-                        as: 'pairDet'
-                    }
-                },
-                { $unwind: "$pairDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'Currency',
-                        localField: 'pairDet.fromCurrency',
-                        foreignField: '_id',
-                        as: 'fromCurrency'
-                    }
-                },
-                { $unwind: "$fromCurrency" },
-                {
-                    $lookup:
-                    {
-                        from: 'Currency',
-                        localField: 'pairDet.toCurrency',
-                        foreignField: '_id',
-                        as: 'toCurrency'
-                    }
-                },
-                { $unwind: "$toCurrency" },
-                {
-                    $project: {
-                        "pairDet": "$pairDet",
-                        "fromCurrencyId": "$fromCurrency._id",
-                        "fromCurrency": "$fromCurrency.currencySymbol",
-                        "toCurrency": "$toCurrency.currencySymbol",
-                        "toCurrencyId": "$toCurrency._id",
-                        "orderDet": "$orderDet",
-                        "orderNo":"$orderNo",
-                        "userId":"$userId",
-                        "ownerId":"$ownerId",
-                        "buyerName": "$buyerDet.username",
-                        "buyerEmail": "$buyerDet.email",
-                        "sellerName": "$sellerDet.username",
-                        "sellerEmail": "$sellerDet.email",
-                        "paymentId": "$paymentId",
-                        "buyerUserId": "$buyerUserId",
-                        "sellerUserId": "$sellerUserId",
-                        "paymentEndDate": "$paymentEndDate",
-                        "orderNo": "$orderNo",
-                        "orderType": "$orderType",
-                        "pairId": "$pairId",
-                        "totalPrice": "$totalPrice",
-                        "price": "$price",
-                        "paymentNames": "$paymentNames",
-                        "country": "$country",
-                        "status": "$status",
-                        "orderLimit": "$orderLimit",
-                        "createdDate": "$createdDate",
-                    },
-                },
-            ]).exec(async function (err, result) {
-                if (result) {
-                    res.json({ "status": true, "message": "P2P Transaction Details listed", data: result });
-                } else {
-                    res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
-                }
-            });
-        } catch (err) {}
-    },
-    async getp2pAppealHistoryDetails(req,res) {
-        try {
-            let query = {};
-            let sort = { createdDate: -1 }
-            query = {_id: mongoose.Types.ObjectId(req.body._id) };
-            P2PAppealHistory.aggregate([
-                {
-                    $match: query
-                },
-                { "$sort": sort },
-                {
-                    $lookup:
-                    {
-                        from: 'Users',
-                        localField: 'userId',
-                        foreignField: '_id',
-                        as: 'appealCreatorDet'
-                    }
-                },
-                { $unwind: "$appealCreatorDet" },
-               
-                {
-                    $lookup:
-                    {
-                        from: 'P2PTransactions',
-                        localField: 'orderNo',
-                        foreignField: 'orderNo',
-                        as: 'orderDet'
-                    }
-                },
-                { $unwind: "$orderDet" },
-                {
-                    $lookup:
-                    {
-                        from: 'Users',
-                        localField: 'orderDet.sellerUserId',
-                        foreignField: '_id',
-                        as: 'toUser'
-                    }
-                },
-                { $unwind: "$toUser" },
-                {
-                    $project: {
-                        "orderDet": "$orderDet",
-                        "appealCreatorEmail": "$appealCreatorDet.email",
-                        "appealCreatorUserName": "$appealCreatorDet.username",
-                        "appealCreatorDet" : "$appealCreatorDet",
-                        "appealHistory": "$appealHistory",
-                        "helpbuyer": "$helpbuyer",
-                        "helpseller": "$helpseller",
-                        "userId": "$userId",
-                        "orderNo": "$orderNo",
-                        "appealCode": "$appealCode",
-                        "reason": "$reason",
-                        "status": "$status",
-                        "createdDate": "$createdDate",
-                        "createdDate": "$createdDate",
-                        "toUserDet": "$toUser",
-                    },
-                },
-            ]).exec(async function (err, result) {
-                if (result) {
-                    res.json({ "status": true, "message": "P2P Transaction Details listed", data: result });
-                } else {
-                    res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
-                }
-            });
-        } catch (err) {}
-    },
-    async p2ppaymentReceived(req,res){
-        
-        // return res.json({ status: false, message: "We have stopped these services temporary. We will get back soon." })
-        try {
-            try {
-                const orderwith = oArray.indexOf(req.userId.toString());
-                if (orderwith == -1) {
-                    oArray.push(req.userId.toString())
-                    setTimeout(_intervalFunc, 5000, req.userId.toString());
-                    let data = {};
-                    let reqBody = req.body.orderDet;
-                    let checkTxn = await query_helper.findoneData(P2PTransactions, { orderNo: reqBody.orderNo }, {});
-                    if (checkTxn.status && (checkTxn.msg.verifyStep == 2 || checkTxn.msg.verifyStep == 3) && checkTxn.msg.status == 3) {
-                        checkTxn = checkTxn.msg;
-                        // if (req.userId != checkTxn.sellerUserId) {
-                        //     res.json({ "status": false, "message": 'Not an valid request' });
-                        //     return false;
-                        // }
-                        await query_helper.updateData(P2PTransactions, "one", { orderNo: reqBody.orderNo }, { status: 1, verifyStep: 4 });
-                        await query_helper.updateData(P2PAppealHistory, "one", { orderNo: reqBody.orderNo }, { status: 2 });
-
-                        let where = checkTxn.pairId != '' ? { _id: mongoose.Types.ObjectId(checkTxn.pairId) } : {};
-                        let pairs = await P2PPair.findOne(where).sort({ _id: 1 }).populate("fromCurrency").populate("toCurrency");
-                        if (pairs) {
-                            if (pairs.fromCurrency) {
-                                let fromCurrency = pairs.fromCurrency;
-                                let buyerUser = checkTxn.orderType == 'buy' ? checkTxn.userId : checkTxn.ownerId;
-                                let sellerUser = checkTxn.orderType == 'buy' ? checkTxn.ownerId : checkTxn.userId;
-                                let walletOutput = await common.getbalance(buyerUser, fromCurrency.currencyId);
-                                if (walletOutput) {
-                                    let buyerDetails = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(buyerUser) }, {});
-                                    if (buyerDetails.status) {
-                                        buyerDetails = buyerDetails.msg;
-                                        let newbal = (+walletOutput.p2pAmount) + (+checkTxn.totalPrice);
-                                        let smsTemplate = "[ Exchange ] P2P Order "+ reqBody.orderNo.slice(- 4) + " has been completed.The seller has released "+ checkTxn.totalPrice + " "+ fromCurrency.currencySymbol +" to your P2P wallet"
-                                        await common.updatep2pAmount(buyerUser, fromCurrency.currencyId, newbal, reqBody.orderNo, 'P2P - Completion');
-                                        if( checkTxn.orderType == 'sell'){
-                                            await common.updatep2pAmountHold(checkTxn.sellerUserId,  fromCurrency.currencyId, -(checkTxn.totalPrice));
-                                        } 
-                                        await common.mobileSMS(buyerDetails.phoneno, smsTemplate, {section: "p2p"});
-                                        await common.p2pactivtylog(req.userId, checkTxn.ownerId, checkTxn.orderNo, checkTxn.orderId, 'Order released', checkTxn.totalPrice + " "+ fromCurrency.currencySymbol + " " + (checkTxn.orderType == 'buy' ? 'Sell' : 'Buy') + ' Order released successfully');
-                                        let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-order-released' }, {});
-                                        if (email_data.status) {
-                                            let username = buyerDetails.username != "" ? (buyerDetails.username) : (buyerDetails.email != "" ? buyerDetails.email : buyerDetails.phoneno);
-                                            let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, username).replace(/###AMOUNT###/g, common.roundValuesMail(+checkTxn.totalPrice, 8));
-                                            res.json({ status: true, message: "Order released successfully", data: checkTxn, type: 0 });
-                                            mail_helper.sendMail({ subject: email_data.msg.subject, to: buyerDetails.email, html: etempdataDynamic }, function (res1) {
-                                            });
-                                        } else {
-                                            res.json({ status: false, message: "Something went wrong! Please try again someother time", type: 0 });
-                                        }
-                                    } else {
-                                        res.json({ status: false, message: "not valid a user!", type: 0 })
-                                    }
-                                } else {
-                                    res.json({ status: false, message: "Please try again after sometime!", type: 0 })
-                                }
-                            } else {
-                                res.json({ status: false, message: "Please try again after sometime!" })
-                            }
-                        } else {
-                            res.json({ status: false, message: "Please try again after sometime!" })
-                        }
-                    } else {
-                        res.json({ status: false, message: "Not a valid transaction!" })
-                    }
-                } else {
-                    setTimeout(_intervalFunc, 5000, req.userId.toString());
-                    res.json({ status: false, message: "Please wait for 5 seconds before placing another request!" });
-                }
-            } catch (err) {
-                console.log('p2ppaymentReceived', err);
-                res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
-            }
-
-        } catch (err) {}
-    },
-    async p2pCancelAppeal(req,res){
-        try {
-            try {
-                let data = {};
-                let userId = req.body.data.appealdet[0].userId;
-                let reqBody = req.body.data.transactiondet;
-                data.cancelReason  = req.body.data.reason;
-                data.status = 2;
-                let checkData = await P2PAppealHistory.find({ orderNo: reqBody.orderNo, userId: mongoose.Types.ObjectId(userId), status: 1 }).sort({ "createdDate": -1 });
-                if (checkData && checkData.length > 0) {
-                    await query_helper.updateData(P2PAppealHistory, "one", { orderNo: reqBody.orderNo, userId: mongoose.Types.ObjectId(userId) }, data);
-                    let userResult = await query_helper.findoneData(Users, { _id: mongoose.Types.ObjectId(userId) }, {});
-                    let userStatus = userResult.msg;
-                    let email_data = await query_helper.findoneData(emailTemplate, { hint: 'p2p-Apeal-Cancel' }, {});
-                    let etempdataDynamic = email_data.msg.content.replace(/###NAME###/g, userStatus.username).replace(/###ORDERNO###/g, reqBody.orderNo);
-                    mail_helper.sendMail({ subject: email_data.msg.subject, to: userStatus.email, html: etempdataDynamic }, function (res1) {
-                    });
-                    res.json({ "status": true, "message": 'Appeal Cancelled Successfully' });
-                } else {
-                    res.json({ "status": false, "message": 'Appeal Not Cancelled' });
-                }
-            } catch (err) {
-                console.log('p2pCancelAppeal', err);
-                res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
-            }
-
-        } catch (err) {}
-    },
-    async p2pcancelOrder(req,res) {
-        try {
-            let data = {};
-            let userId = "";
-            let orderNo = "";        
-            if (req.body.data) {
-                userId = req.body.data.userId;
-                orderNo = req.body.data.orderNo;
-                data = { status: 2, cancelReason: req.body.data.reason };
-            }
-            let response = await p2pHelper.admincancelOrder(orderNo, userId, data);
-            res.json(response);
-        } catch (err) {
-            console.log("err_err",)
-            res.json({ "status": false, "message": err });
-        }
-    },
     async getP2PSettings(req, res) {
         try {
             let settings = await query_helper.findoneData(P2PSettings, {}, {})
@@ -3883,43 +3501,43 @@ const p2pController = {
             let getdata = req.body.formvalue;
             let sort = { createdDate: -1 }
             query = { type: "blockuser" };
-            if(getdata.fromdate != '' && getdata.todate!=''){
-                var fromDate= new Date(getdata.fromdate);
-                var toDate = new Date(getdata.todate);
-                var dateFilter= new Date(fromDate.setTime(fromDate.getTime() + 5.5*60*60*1000));
-                var nextDateFilter = new Date(toDate.setTime(toDate.getTime() + 29.49*60*60*1000));
-                query.createdDate = {
-                    "$gte":dateFilter,
-                    "$lt":nextDateFilter
+            if (getdata) {
+                if(getdata.fromdate != '' && getdata.todate!=''){
+                    var fromDate= new Date(getdata.fromdate);
+                    var toDate = new Date(getdata.todate);
+                    var dateFilter= new Date(fromDate.setTime(fromDate.getTime() + 5.5*60*60*1000));
+                    var nextDateFilter = new Date(toDate.setTime(toDate.getTime() + 29.49*60*60*1000));
+                    query.createdDate = {
+                        "$gte":dateFilter,
+                        "$lt":nextDateFilter
+                    }
+                }
+                if(getdata.searchQuery != '') {
+                    var queryvalue=getdata.searchQuery
+                    let userMatchQ = { "email": new RegExp(queryvalue,"i")}
+                    let users = await query_helper.findData(Users, userMatchQ, {_id:1}, {}, 0)
+                    let userIds = [];
+                    if(users.status && users.msg.length > 0) {
+                        users.msg.forEach(function(item) {
+                            userIds.push(item._id);
+                        });                    
+                    }
+                    if(userIds.length > 0) {
+                        query['$or'] = [
+                            {
+                                userId: { $in: userIds },
+                                advertiserNo: { $in: userIds }
+                            }
+                        ]
+                    } else {
+                        query.pairName = '';
+                    }
                 }
             }
-            if (req.body.formvalue.status != '') {
-                query.status = req.body.formvalue.status == "blocked" ? 0 : 1 ;
-            }
-            if(getdata.searchQuery != '') {
-                var queryvalue=getdata.searchQuery
-                let userMatchQ = { "email": new RegExp(queryvalue,"i")}
-                let users = await query_helper.findData(Users, userMatchQ, {_id:1}, {}, 0)
-                let userIds = [];
-                if(users.status && users.msg.length > 0) {
-                    users.msg.forEach(function(item) {
-                        userIds.push(item._id);
-                    });                    
-                }
-                if(userIds.length > 0) {
-                    query['$or'] = [
-                        {
-                            userId: { $in: userIds },
-                            advertiserNo: { $in: userIds }
-                        }
-                    ]
-                } else {
-                    query.pairName = '';
-                }
-            }
-            let limit =req.body.limit?parseInt(req.body.limit):10;
-            let offset =req.body.offset? parseInt(req.body.offset):0
-            let blockdcount= await P2PReport.find(query).countDocuments();
+            query.status = 1 ;
+            let limit = req.body.limit?parseInt(req.body.limit):10;
+            let offset = req.body.offset? parseInt(req.body.offset):0
+            let blockdcount = await P2PReport.find(query).countDocuments();
             P2PReport.aggregate([
                 {
                     $match: query
@@ -4178,67 +3796,6 @@ const p2pController = {
             }
 
         } catch (err) {}
-    },
-    async getPairsfilter (req, res) {
-        try {
-            let matchQ = {};
-            let getdata=req.body.formvalue
-            if(getdata.pair!=''){
-                var queryvalue=getdata.pair
-                matchQ.pair = new RegExp(queryvalue,"i");
-            }
-            if(getdata.status!=''){
-                var queryvalue=getdata.status
-                matchQ.status = queryvalue
-            }
-            let limit =req.body.limit?parseInt(req.body.limit):10;
-            let offset =req.body.offset? parseInt(req.body.offset):0
-            let pairs = await query_helper.findDatafilter(P2PPair,matchQ,{},{_id:-1},limit,offset)
-            let pairscount = await P2PPair.countDocuments(matchQ)
-            res.json({ "status": pairs.status, "getp2ppairsDetails": pairs.msg, "total":pairscount});
-        } catch (e) {
-            console.log('getPairsfilter',e);
-            res.json({ "status": false, "message": "Something went wrong! Please try again someother time" });
-        }
-    },
-    async addPairs (req, res) {
-        let data = req.body;
-        let fromCurrency = await query_helper.findoneData(CurrencyDb,{_id: mongoose.Types.ObjectId(data.fromCurrency)},{});
-        let toCurrency = await query_helper.findoneData(CurrencyDb,{_id: mongoose.Types.ObjectId(data.toCurrency)},{});
-        if(fromCurrency.status && toCurrency.status) {
-            data.pair = fromCurrency.msg.currencySymbol+'_'+toCurrency.msg.currencySymbol
-            let getPairs = await query_helper.findoneData(P2PPair,{fromCurrency: mongoose.Types.ObjectId(data.fromCurrency), toCurrency: mongoose.Types.ObjectId(data.toCurrency)},{})
-            if(!getPairs.status) {
-                let pairs = await query_helper.insertData(P2PPair,data)
-                if(pairs.status) {
-                    await commonHelper.adminactivtylog(req, 'Pair Added', req.userId, mongoose.Types.ObjectId(data._id), 'New Pair', 'New Pair Added Successfully');
-                    res.json({ "status": pairs.status, "message": 'P2P Pair Added Successfully!' });
-                } else {
-                    res.json({ "status": false, "message": pairs.msg });
-                }
-            } else {
-                res.json({ "status": false, "message": 'P2P Pair Already Exists' });
-            }
-        } else {
-            res.json({ "status": false, "message": 'Not a valid from and to currency' });
-        }
-    },
-    async updatePairs (req, res) {
-        let data = req.body;
-        let getPairs = await query_helper.findoneData(P2PPair,{fromCurrency: mongoose.Types.ObjectId(data.fromCurrency), toCurrency: mongoose.Types.ObjectId(data.toCurrency), _id: { $ne: mongoose.Types.ObjectId(data._id) }},{})
-        if(!getPairs.status) {
-            delete data.fromCurrency;
-            delete data.toCurrency;
-            let pairs = await query_helper.updateData(P2PPair,"one",{_id:mongoose.Types.ObjectId(data._id)},data)
-            if(pairs.status) {
-                await commonHelper.adminactivtylog(req, 'P2P Pair Updated', req.userId, mongoose.Types.ObjectId(data._id), 'Pair Updated', ' Pair Updated Successfully');
-                res.json({ "status": pairs.status, "message": 'P2P Pair Updated Successfully!' });
-            } else {
-                res.json({ "status": false, "message": pairs.msg });
-            }
-        } else {
-            res.json({ "status": false, "message": 'P2P Pair Already Exists' });
-        }
     },
     async getFaq (req, res) {
         try {

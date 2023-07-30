@@ -706,6 +706,7 @@ const adminController = {
         try {
             let getdet = req.body;
             let where = {};
+            let findEmails = [];
             switch (getdet.type) {
                 case 'Active Users':
                     where.status = 1;
@@ -725,9 +726,17 @@ const adminController = {
                 case 'Bank Not Verified Users':
                     where.bankstatus = 0;
                     break;
+                case 'Select Users':
+                    if (getdet.email){
+                        getdet.email.split(",").map(function (value) {
+                            findEmails.push(value);
+                        });
+                    } 
+                    where.email = { $in: findEmails };
+                    break;
             }
             let userList = await query_helper.findData(Users, where, { email: 1 }, { _id: -1 }, 0);
-            if (userList.status) {
+            if (userList.status && userList.msg.length > 0) {
                 let toAddress = config.smtpDetails.email;
                 let bccAddress = [];
                 userList.msg.forEach(element => {
@@ -743,6 +752,7 @@ const adminController = {
                     let etempdataDynamic = email_data.content.replace(/###CONTENT###/g, getdet.content);
                     await common.adminactivtylog(req, 'newsletter', req.userId, toAddress, 'news letter', 'news letter sent');
                     mail_helper.sendMail({ subject: getdet.subject, to: toAddress, html: etempdataDynamic, bcc: bccAddress }, function (res1) {
+                        console.log("res1:",res1)
                         res.json({ "status": true, "message": "NewsLetter send to " + getdet.type });
                     });
                 } else {

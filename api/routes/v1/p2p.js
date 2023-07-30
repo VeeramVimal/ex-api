@@ -66,13 +66,6 @@ router.post('/getfeedbackDetails',commonHelper.tokenMiddlewareCustomers,p2pContr
 router.post('/submitReport',commonHelper.tokenMiddlewareCustomers,p2pController.submitReport);
 
 {/* admin panel */}
-router.post('/getallTransactions',commonHelper.tokenMiddlewareAdmin,p2pController.getallTransactions);
-router.post('/getallAppealDetails',commonHelper.tokenMiddlewareAdmin,p2pController.getallAppealDetails);
-router.post('/getTransactionHistoryDetails',commonHelper.tokenMiddlewareAdmin,p2pController.getTransactionHistoryDetails);
-router.post('/getp2pAppealHistoryDetails',commonHelper.tokenMiddlewareAdmin,p2pController.getp2pAppealHistoryDetails);
-router.post('/p2pCancelAppeal',commonHelper.tokenMiddlewareAdmin,p2pController.p2pCancelAppeal);
-router.post('/p2pcancelOrder',commonHelper.tokenMiddlewareAdmin,p2pController.p2pcancelOrder);
-router.post('/p2ppaymentReceived',commonHelper.tokenMiddlewareAdmin,p2pController.p2ppaymentReceived);
 router.post('/UpdateP2PSettings',commonHelper.tokenMiddlewareAdmin,p2pController.UpdateP2PSettings);
 router.get('/getP2PSettings',p2pController.getP2PSettings);
 router.post('/getp2pReportDetails',commonHelper.tokenMiddlewareAdmin,p2pController.getp2pReportDetails);
@@ -81,16 +74,9 @@ router.post('/getp2pBlockedUserstDetails',commonHelper.tokenMiddlewareAdmin,p2pC
 router.post('/getp2pFeedbackDetails',commonHelper.tokenMiddlewareAdmin,p2pController.getp2pFeedbackDetails);
 router.post('/getp2pFeedbackList',commonHelper.tokenMiddlewareAdmin,p2pController.getp2pFeedbackList);
 router.post('/blockUnlockUser',commonHelper.tokenMiddlewareAdmin,p2pController.blockUnlockUser);
-router.post('/getPairsfilter',commonHelper.tokenMiddlewareAdmin,p2pController.getPairsfilter); 
-router.post('/addPairs',commonHelper.tokenMiddlewareAdmin,p2pController.addPairs); 
-router.post('/updatePairs',commonHelper.tokenMiddlewareAdmin,p2pController.updatePairs); 
 router.post('/getFaq',commonHelper.tokenMiddlewareAdmin,p2pController.getFaq); 
 router.get('/getFaqDetails',commonHelper.tokenMiddlewareAdmin,p2pController.getFaqDetails); 
 router.post('/addFaq',commonHelper.tokenMiddlewareAdmin,p2pController.addFaq); 
 router.post('/updateFaq',commonHelper.tokenMiddlewareAdmin,p2pController.updateFaq); 
-
-
-
-
 
 module.exports = router;

@@ -10,40 +10,37 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage });
-router.get('/setSiteDeploy', adminController.setSiteDeploy);
-router.get('/getLogs', adminController.getLogs);
-router.get('/deleteLogs', adminController.deleteLogs);
-router.get('/getErrLogs', adminController.getErrLogs);
-router.get('/getCurrencyBalance', adminController.getCurrencyBalance);
-router.get('/deleteErrLogs', adminController.deleteErrLogs);
+router.get('/getBankDetails', adminController.getBankDetails);
 router.post('/login', adminController.login);
 router.post('/forgotPassword', adminController.forgotPassword);
 router.post('/forgotPasswordCheck', adminController.forgotPasswordCheck);
 router.post('/resetPassword', adminController.resetPassword);
 // router.post('/changePassword', adminController.changePassword);
 router.get('/getSiteSettings', adminController.getSiteSettings);
+router.post('/fileUpload', upload.array("images[]"), adminController.updateImages);
+
+router.get('/setSiteDeploy', commonHelper.tokenMiddlewareAdmin, adminController.setSiteDeploy);
+router.get('/getLogs', commonHelper.tokenMiddlewareAdmin, adminController.getLogs);
+router.get('/deleteLogs', commonHelper.tokenMiddlewareAdmin, adminController.deleteLogs);
+router.get('/getErrLogs', commonHelper.tokenMiddlewareAdmin, adminController.getErrLogs);
+router.get('/getCurrencyBalance', commonHelper.tokenMiddlewareAdmin, adminController.getCurrencyBalance);
+router.get('/deleteErrLogs', commonHelper.tokenMiddlewareAdmin, adminController.deleteErrLogs);
 router.post('/UpdateSiteSettings', commonHelper.tokenMiddlewareAdmin, adminController.UpdateSiteSettings);
-router.get('/getBankDetails', adminController.getBankDetails);
 router.post('/updateBankDetails', commonHelper.tokenMiddlewareAdmin, adminController.updateBankDetails);
 router.get('/getMyProfile', commonHelper.tokenMiddlewareAdmin, adminController.getMyProfile);
 router.post('/updateMyProfile', commonHelper.tokenMiddlewareAdmin, adminController.updateMyProfile);
 router.post('/sendPushNotification', commonHelper.tokenMiddlewareAdmin, adminController.sendPushNotification);
-router.post('/addStakingEnabled', commonHelper.tokenMiddlewareAdmin, adminController.addStakingEnabled);
 router.post('/changePassword', commonHelper.tokenMiddlewareAdmin, adminController.changePassword);
 router.get('/getDocs', commonHelper.tokenMiddlewareAdmin, adminController.getDocs);
-router.post('/getStakeEnableUser', commonHelper.tokenMiddlewareAdmin, adminController.getStakeEnableUser);
-router.post('/deleteEnabledUser', commonHelper.tokenMiddlewareAdmin, adminController.deleteEnabledUser);
-router.post('/updateUserBalance',  commonHelper.tokenMiddlewareAdmin, adminController.updateUserBalanceManualy);
-router.post('/getUserBalanceSetView',  commonHelper.tokenMiddlewareAdmin, adminController.getUserBalanceSetView);
+router.post('/updateUserBalance', commonHelper.tokenMiddlewareAdmin, adminController.updateUserBalanceManualy);
+router.post('/getUserBalanceSetView', commonHelper.tokenMiddlewareAdmin, adminController.getUserBalanceSetView);
 router.post('/getDocsById', commonHelper.tokenMiddlewareAdmin, adminController.getDocsById);
-router.post('/addDocs' , commonHelper.tokenMiddlewareAdmin, adminController.addDocs);
+router.post('/addDocs', commonHelper.tokenMiddlewareAdmin, adminController.addDocs);
 router.post('/updateDocs', commonHelper.tokenMiddlewareAdmin, adminController.updateDocs);
 router.post('/deleteDocs', commonHelper.tokenMiddlewareAdmin, adminController.deleteDocs);
 router.get('/getDashboardCount', commonHelper.tokenMiddlewareAdmin, adminController.getDashboardCount);
-router.post('/fileUpload', upload.array("images[]"), adminController.updateImages);
 router.post('/sendNewsLetter', commonHelper.tokenMiddlewareAdmin, adminController.sendNewsLetter);
-router.post('/getactivitylogadmin' ,  commonHelper.tokenMiddlewareAdmin, adminController.getactivitylogadmin);
-
+router.post('/getactivitylogadmin', commonHelper.tokenMiddlewareAdmin, adminController.getactivitylogadmin);
 router.get('/depositEVMBased', commonHelper.tokenMiddlewareAdmin, adminCustomerWalletController.depositEVMBased);
 
 module.exports = router;

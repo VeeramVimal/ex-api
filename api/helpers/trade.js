@@ -189,7 +189,7 @@ exports.createOrder = async function (data, placeType, res) {
                             }
                             var total = amount * price;
                             if (total < min_trade_amount) {
-                              response['msg'] = "Trade Total must be " + min_trade_amount + " " + pair_details.tocurrency[0].currencySymbol;
+                              response['msg'] = "Enter trade total must be more than " + min_trade_amount + " " + pair_details.tocurrency[0].currencySymbol;
                               _tradeMap._createResponse(response);
                             } else {
                               const markerResponse = await getOrderValue(orderType, pair_details._id, type, price);
@@ -504,7 +504,7 @@ exports.createCopyTradeOrder = async function (leader_details,copy_user_details,
                             }
                             var total = amount * price;
                             if (total < min_trade_amount) {
-                              response['msg'] = "Trade Total must be " + min_trade_amount + " " + pair_details.tocurrency[0].currencySymbol;
+                              response['msg'] = "Enter trade total must be more than " + min_trade_amount + " " + pair_details.tocurrency[0].currencySymbol;
                               _tradeMap._createResponse(response);
                             } else {
                               const markerResponse = await getOrderValue(orderType, pair_details._id, type, price);
@@ -1868,11 +1868,8 @@ mapTrade.prototype.referral = async function (userId, currencyId, pair, fee, typ
         let tradeFeeDiscount = settData.msg.tradeFeeDiscount > 0 ? settData.msg.tradeFeeDiscount : 0;
         const referralBonusCurrency = settData.msg.referralBonusCurrency;
 
-        // console.log({referralBonusCurrency});
-
         if (referralBonusCurrency != '') {
           const curResult = await query_helper.findoneData(CurrencyDb, { _id: mongoose.mongo.ObjectId(referralBonusCurrency) }, { siteDecimal: 1, USDvalue: 1, currencyId: 1, currencySymbol: 1 })
-          // console.log({curResult});
           if (curResult.status) {
             const {
               USDvalue: refUSDvalue,
@@ -1884,10 +1881,10 @@ mapTrade.prototype.referral = async function (userId, currencyId, pair, fee, typ
             let voucherData = await query_helper.findoneData(VoucherDB, {
               userId: mongoose.mongo.ObjectId(userId),
               currencyId: mongoose.mongo.ObjectId(currencyId_wallet),
-              claim: 1
+              claim: 1,
+              balance: {"$gt": 0},
+              expireDate: {"$gt": new Date()}
             }, {});
-
-            // console.log({voucherData}, { mmmuserId: userId, userId: mongoose.mongo.ObjectId(userId), claim: 1 });
 
             if (voucherData.status && voucherData.msg && voucherData.msg.balance && voucherData.msg.balance > 0) {
               const beforeamountTradeFee = voucherData.msg.balance;
@@ -3160,6 +3157,9 @@ exports.updateWazirxTrades = async function (type, pair, data, percentageChange)
         update.pair = pair.pair;
         await query_helper.insertData(OrderBookDB, update);
       }
+    }
+    else {
+      console.log({ correctSocketRecord, pair: pair.pair });
     }
   }
 

@@ -138,6 +138,7 @@ exports.decrypt = (value) => {
   return dec;
 };
 exports.cronCheck = async function (data={}, callback) {
+  console.log("cronCheck");
   var file = path.join(__dirname, '../public/settings/settings.json');
   return fs.readFile(file, function (err, data) {
     if(err) {
@@ -522,97 +523,109 @@ exports.updateUserBalance = async function (
   type,
   extdata = {}
 ) {
-  const userWalletFindData = {
-    userId: mongoose.mongo.ObjectId(userId),
-    currencyId: mongoose.mongo.ObjectId(currencyId),
-  }
-  const wallet_data = await queryHelper.findoneData(
-    UserWallet,
-    userWalletFindData,
-    {}
-  );
-  let balance = 0;
-  if (wallet_data.status && wallet_data.msg) {
-    if (type == 'p2pWallet') {
-      balance = wallet_data.msg.p2pAmount;
-    } else if (type == 'usdmWallet') {
-      balance = wallet_data.msg.perpetualAmount;
-    } else {
-      balance = wallet_data.msg.amount;
-    }
-  } else {
-    let createwallet = {
+  try{
+    const userWalletFindData = {
       userId: mongoose.mongo.ObjectId(userId),
       currencyId: mongoose.mongo.ObjectId(currencyId),
-      p2pAmount: 0,
-      p2pHold: 0,
-      perpetualAmount: 0,
-      perpetualHold: 0,
-      amount: 0,
-      hold: 0,
+    }
+    const wallet_data = await queryHelper.findoneData(
+      UserWallet,
+      userWalletFindData,
+      {}
+    );
+    let balance = 0;
+    if (wallet_data.status && wallet_data.msg) {
+      if (type == 'p2pWallet') {
+        balance = wallet_data.msg.p2pAmount;
+      } else if (type == 'usdmWallet') {
+        balance = wallet_data.msg.perpetualAmount;
+      } else {
+        balance = wallet_data.msg.amount;
+      }
+    } else {
+      let createwallet = {
+        userId: mongoose.mongo.ObjectId(userId),
+        currencyId: mongoose.mongo.ObjectId(currencyId),
+        p2pAmount: 0,
+        p2pHold: 0,
+        perpetualAmount: 0,
+        perpetualHold: 0,
+        amount: 0,
+        hold: 0,
+      };
+      await queryHelper.insertData(UserWallet, createwallet);
+      balance = 0;
+    }
+
+    const updations = {
+      userId: mongoose.mongo.ObjectId(userId),
+      currencyId: mongoose.mongo.ObjectId(currencyId),
+      amount: roundValues(amount, 8),
+      difference: roundValues(amount - balance, 8),
+      oldBalance: roundValues(balance, 8),
+      lastId: lastId,
+      type: type,
+      notes: extdata.notes ? JSON.stringify(extdata.notes) : "",
     };
-    await queryHelper.insertData(UserWallet, createwallet);
-    balance = 0;
-  }
+    let balanceId;
+    let balanceUpdColl;
 
-  const updations = {
-    userId: mongoose.mongo.ObjectId(userId),
-    currencyId: mongoose.mongo.ObjectId(currencyId),
-    amount: roundValues(amount, 8),
-    difference: roundValues(amount - balance, 8),
-    oldBalance: roundValues(balance, 8),
-    lastId: lastId,
-    type: type,
-    notes: extdata.notes ? JSON.stringify(extdata.notes) : "",
-  };
-  let balanceId;
-  let balanceUpdColl;
+    if (type == 'p2pWallet') {
+      balanceUpdColl = P2PBalanceUpdation;
+    } else if (type == 'usdmWallet') {
+      balanceUpdColl = USDMBalanceUpdation;
+    } else {
+      balanceUpdColl = BalanceUpdation;
+    }
 
-  if (type == 'p2pWallet') {
-    balanceUpdColl = P2PBalanceUpdation;
-  } else if (type == 'usdmWallet') {
-    balanceUpdColl = USDMBalanceUpdation;
-  } else {
-    balanceUpdColl = BalanceUpdation;
-  }
+    balanceId = await queryHelper.insertData(balanceUpdColl, updations);
 
-  balanceId = await queryHelper.insertData(balanceUpdColl, updations);
+    let updBalData = {}
+    if (type == 'p2pWallet') {
+      updBalData = { p2pAmount: +roundValues(+amount, 8) };
+    } else if (type == 'usdmWallet') {
+      updBalData = { perpetualAmount: +roundValues(+amount, 8) };
+    }
+    else {
+      updBalData = { amount: +roundValues(+amount, 8) };
+    }
 
-  let updBalData = {}
-  if (type == 'p2pWallet') {
-    updBalData = { p2pAmount: +roundValues(+amount, 8) };
-  } else if (type == 'usdmWallet') {
-    updBalData = { perpetualAmount: +roundValues(+amount, 8) };
-  }
-  else {
-    updBalData = { amount: +roundValues(+amount, 8) };
-  }
+    await queryHelper.updateData(
+      UserWallet,
+      "one",
+      userWalletFindData,
+      updBalData
+    );
 
-  await queryHelper.updateData(
-    UserWallet,
-    "one",
-    userWalletFindData,
-    updBalData
-  );
+    // if (balance < 0) {
+    //   let email_data = await query_helper.findoneData(emailTemplate, { hint: 'negative-hold-issue' }, {})
+    //   if (email_data.status) {
+    //     const userResult = await query_helper.findoneData(Users, { "_id": mongoose.Types.ObjectId(userId) }, {});
+    //     if (userResult.status) {
+    //       email_data = email_data.msg;
+    //       let emailtemplate = email_data.content.replace(/###USER###/g, userResult.msg.username).replace(/###BALANCE###/g, balance);
+    //       mail_helper.sendMail({ subject: email_data.subject, to: 'test@yopmail.com', html: emailtemplate }, (aftermail) => {
+    //       })
+    //     }
+    //   }
+    // }
 
-  // if (balance < 0) {
-  //   let email_data = await query_helper.findoneData(emailTemplate, { hint: 'negative-hold-issue' }, {})
-  //   if (email_data.status) {
-  //     const userResult = await query_helper.findoneData(Users, { "_id": mongoose.Types.ObjectId(userId) }, {});
-  //     if (userResult.status) {
-  //       email_data = email_data.msg;
-  //       let emailtemplate = email_data.content.replace(/###USER###/g, userResult.msg.username).replace(/###BALANCE###/g, balance);
-  //       mail_helper.sendMail({ subject: email_data.subject, to: 'test@yopmail.com', html: emailtemplate }, (aftermail) => {
-  //       })
-  //     }
-  //   }
-  // }
-
-  if (balanceId && balanceId.msg && balanceId.msg._id) {
-    return balanceId.msg._id;
-    // return updations;
-  }
-  else {
+    if (balanceId && balanceId.msg && balanceId.msg._id) {
+      return balanceId.msg._id;
+      // return updations;
+    }
+    else {
+      return false;
+    }
+  } catch (e) {
+    console.log("updateUserBalance", e, {
+      userId,
+      currencyId,
+      amount,
+      lastId,
+      type,
+      extdata
+    });
     return false;
   }
 };
@@ -1126,10 +1139,8 @@ exports.userNotification = async function (userId, content, content1) {
   await query_helper.insertData(Notification, userlogdata);
   return true;
 };
-
 exports.userNotify = async function (data = {}) {
 };
-
 let userAppPushNotification = (exports.userAppPushNotification = async function (userId, content1) {
   // let profile = await query_helper.findoneData(
   //   Users,

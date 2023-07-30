@@ -13,7 +13,7 @@ const storage = new CloudinaryStorage({
     folder: 'admin',
     public_id: (req, file) => {
       return (
-          new Date().toISOString().replace(/:/g, "-") + file.originalname
+        new Date().toISOString().replace(/:/g, "-") + file.originalname
       );
     }
   },

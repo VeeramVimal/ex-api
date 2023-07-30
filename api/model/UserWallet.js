@@ -21,6 +21,11 @@ var walletSchema = new Schema({
 	"p2pHold": {type: Number, default: 0},
 	// loan
 	"cryptoLoanAmount": {type: Number, default: 0},
-	"cryptoLoanHold": {type: Number, default: 0}
+	"cryptoLoanHold": {type: Number, default: 0},
+	//** Bear & Bull */
+	"gamePredictionAmount": {type: Number, default: 0},
+	//** Simple-earning */
+	"simpleEarnAmount": {type: Number, default: 0},
+	"simpleEarnHold": {type: Number, default: 0}
 });
 module.exports = mongoose.model('UserWallet', walletSchema, 'UserWallet')

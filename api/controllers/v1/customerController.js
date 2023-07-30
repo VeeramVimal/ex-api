@@ -63,16 +63,19 @@ const customerController = {
                 }
                 const response = common.checkCaptcha(recaptcha);
                 if (response) {
-                    let emailegt = (req_data.email).toLowerCase();
-                    if(emailegt) {
+                    let emailegt = "";
+                    if(req_data.email) {
+                        emailegt = (req_data.email).toLowerCase();
                         emailegt = emailegt.replace(/ /g, "");
                     }
                     let userFindData = {};
-
-                    if(req_data.email) {
-                        userFindData.email = req_data.email;
+                    let userVerifyChk = {type: "register"};
+                    if(emailegt) {
+                        userVerifyChk.email = emailegt;
+                        userFindData.email = emailegt;
                     }
                     else {
+                        userVerifyChk.phoneno = req_data.phoneno;
                         userFindData.phoneno = req_data.phoneno;
                     }
 
@@ -222,9 +225,19 @@ const customerController = {
                             }
                         }
                         else {
-                            // Yes, some issues fixed. i will deploy now
-                            return res.json({ status: false, message: "Invalid User details" });
-    
+                            let verResData = await query_helper.findoneData(VerifyUsers, userVerifyChk, {});
+                            console.log({verResData});
+                            if(verResData.status && verResData.msg && verResData.msg.type) {
+                                if(userVerifyChk.email) {
+                                    return res.json({ status: false, message: "Your E-Mail not verified" });
+                                }
+                                else {
+                                    return res.json({ status: false, message: "Your Mobile number not verified" });
+                                }
+                            }
+                            else {
+                                return res.json({ status: false, message: "Invalid User details" });
+                            }
                             // if(isNaN(emailegt) === false) {
                             //     if(emailegt.includes("+") === false) {
                             //         return res.json({ status: false, message: "Invalid User details, Please enter phone number with country code." });
@@ -497,13 +510,18 @@ const customerController = {
                     else {
                         let genotp = await common.getOTPCode({from:"user"});
                         let insertVerifyData = { otp: genotp, otpTime: new Date(), type: 'register' };
+
+                        let otpWhere = {};
                         if(getdet.email) {
+                            otpWhere.email = getdet.email;
                             insertVerifyData.email = getdet.email;
                         }
                         else if(getdet.phoneno) {
+                            otpWhere.phoneno = getdet.phoneno;
                             insertVerifyData.phoneno = getdet.phoneno;
                         }
                         let verifySend = await query_helper.insertData(VerifyUsers, insertVerifyData);
+                        // let verifySend = await query_helper.updateData(VerifyUsers, "one", otpWhere, insertVerifyData, { upsert: true });
 
                         if (verifySend.status) {
                             let tempMsgContent = "";

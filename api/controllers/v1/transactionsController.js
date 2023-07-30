@@ -14,16 +14,35 @@ const transactionsController = {
             };
             let getdata = req.body.formvalue;
             if(getdata.searchQuery != '') {
-                matchQ = {
+                matchQ['$and'].push({
+                    '$or': [
+                        { "address": { $regex: getdata.searchQuery } },
+                        { "txnId": { $regex: getdata.searchQuery } }
+                    ]
+                });
+                let userMatchQ = {
                     '$and': [
                         {
                             '$or': [
-                                { "address": { $regex: getdata.searchQuery } },
-                                { "txnId": { $regex: getdata.searchQuery } }
+                                { "username": { $regex: getdata.searchQuery } },
+                                { "email": { $regex: getdata.searchQuery } },
+                                { "phoneno": { $regex: getdata.searchQuery } },
                             ]
                         }
                     ]
                 };
+                let users = await query_helper.findData(Users, userMatchQ, {_id:1}, {})
+                let userIds = [];
+                if(users.status && users.msg.length > 0) {
+                    users.msg.forEach(function(item) {
+                        userIds.push(item._id);
+                    });                    
+                    if(userIds.length > 0) {
+                        matchQ['$and'][0]["$or"].push({
+                            userId: {$in: userIds}
+                        });
+                    }
+                }
             }
             if(getdata.fromdate != '' && getdata.todate != ''){
                 var fromDate= new Date(getdata.fromdate);
@@ -59,10 +78,6 @@ const transactionsController = {
                     matchQ['$and'].push({
                         depositType: getdata.depositType
                     });
-                } else {
-                    // matchQ['$and'].push({
-                    //     depositType: ''
-                    // });
                 }
             }
             if(getdata.currencyId != '') {
@@ -70,44 +85,13 @@ const transactionsController = {
                     currencyId: mongoose.Types.ObjectId(getdata.currencyId)
                 });
             }
-            if(getdata.searchQuery != '') {
-                let userMatchQ = {
-                    '$and': [
-                        {
-                            '$or': [
-                                { "username": { $regex: getdata.searchQuery } },
-                                { "email": { $regex: getdata.searchQuery } },
-                                // { "address": { $regex: getdata.searchQuery } }
-                            ]
-                        }
-                    ]
-                };
-                let users = await query_helper.findData(Users, userMatchQ, {_id:1}, {})
-                let userIds = [];
-                if(users.status && users.msg.length > 0) {
-                    users.msg.forEach(function(item) {
-                        userIds.push(item._id);
-                    });                    
-                }
-                if(userIds.length > 0) {
-                    matchQ['$and'].push({
-                        userId: {$in: userIds}
-                    });
-                } else {
-                    // matchQ['$and'].push({
-                    //     type: ''
-                    // });
-                }
-            }
             let limit = req.body.limit?parseInt(req.body.limit):10;
             let offset = req.body.offset? parseInt(req.body.offset):0;
 
             if(matchQ['$and'] && matchQ['$and'].length == 0) {
                 matchQ = {};
-            } 
-
-            console.log(JSON.stringify({matchQ}));
-
+            }
+            // console.log(JSON.stringify({matchQ}));
             let transactions = await Transactions.find(matchQ)
                 .sort({_id:-1})
                 .populate({ path: "userId", select: "username email phoneno" })

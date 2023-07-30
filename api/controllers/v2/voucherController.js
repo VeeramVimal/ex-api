@@ -100,6 +100,9 @@ const voucherController = {
                 respAlready = respAlready.msg;
 
                 if(respAlready.claim === 1) {
+                    return res.json({ "status": true, "message": "Voucher already claimed" });
+                }
+                else if(respAlready.claim === 2) {
                     return res.json({ "status": true, "message": "Voucher expired" });
                 }
 

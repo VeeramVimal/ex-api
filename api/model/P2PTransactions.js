@@ -24,6 +24,7 @@ var P2PTransactionsSchema = new Schema({
       userId  : { type: mongoose.Schema.Types.ObjectId, ref: 'Users', 'index':true},
       message : { type: String, default: '' },
       chattingImage  : { type: String, default: '' },
+      userType : { type: String, default: '' },
       createdDate     : { type: Date, default: Date.now },
   }],
   verifyStep      : { type: Number, index: true, default: 1 }, //{1-step1, 2-step1,3-step1 },
@@ -31,6 +32,8 @@ var P2PTransactionsSchema = new Schema({
   status          : { type: Number, index: true, default: 3 }, //{0-pending, 1-completed, 2-cancelled,3-user side pending },
   orderEndDate    : { type: Date, default: Date.now },
   paymentEndDate    : { type: Date, default: Date.now },
+  orderReleasedDate    : { type: Date, default: "" },
+  cancelledDate    : { type: Date, default: "" },
   createdDate     : { type: Date, default: Date.now },
 });
 

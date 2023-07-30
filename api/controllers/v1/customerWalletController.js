@@ -16,14 +16,15 @@ const Staking = mongoose.model("Staking");
 const StakingHistory = mongoose.model("StakingHistory");
 const stakeEnableList = mongoose.model("StakingEnabledUser");
 const profit = mongoose.model("Profit");
-let StakeBonusHistory = mongoose.model('StakeBonusHistory');
+const StakeBonusHistory = mongoose.model('StakeBonusHistory');
+const GamePredictionBalanceUpdation = mongoose.model('GamePreditionBalanceUpdation');
 
 const BalanceUpdation = mongoose.model("BalanceUpdation");
 const P2PBalanceUpdation = mongoose.model("P2PBalanceUpdation");
 const USDMBalanceUpdation = mongoose.model("USDMBalanceUpdation");
-let StakeBalanceUpdation = mongoose.model('StakeBalanceUpdation');
-let CryptoLoanBalanceUpdation = mongoose.model('CryptoLoanBalanceUpdation');
-
+const StakeBalanceUpdation = mongoose.model('StakeBalanceUpdation');
+const CryptoLoanBalanceUpdation = mongoose.model('CryptoLoanBalanceUpdation');
+const SimpleEarnBalanceUpdation = mongoose.model('SimpleEarnBalanceUpdation');
 const activityDB = mongoose.model('UserActivity');
 let updateInternal = 0;
 let stakeBonuses = {};
@@ -225,23 +226,23 @@ const customerWalletController = {
                     where.type = 'Deposit';
                 }
             }
-            if(typeof req.body.currencySymbol == 'string' && req.body.currencySymbol != '') {
-                let currency = await query_helper.findoneData(Currency, {currencySymbol: req.body.currencySymbol}, {});
-                if(currency.status) {
+            if (typeof req.body.currencySymbol == 'string' && req.body.currencySymbol != '') {
+                let currency = await query_helper.findoneData(Currency, { currencySymbol: req.body.currencySymbol }, {});
+                if (currency.status) {
                     where.walletCurrencyId = currency.msg.currencyId;
                 }
             }
-            else if(typeof req.body.currencyType == 'string' && req.body.currencyType != '') {
-                let currency = await query_helper.findoneData(Currency, {currencySymbol: 'INR'}, {});
-                if(currency.status) {
-                    if(req.body.currencyType == 'Fiat') {
+            else if (typeof req.body.currencyType == 'string' && req.body.currencyType != '') {
+                let currency = await query_helper.findoneData(Currency, { currencySymbol: 'INR' }, {});
+                if (currency.status) {
+                    if (req.body.currencyType == 'Fiat') {
                         where.walletCurrencyId = currency.msg.currencyId;
                     } else {
-                        where.walletCurrencyId = {$ne: currency.msg.currencyId};
+                        where.walletCurrencyId = { $ne: currency.msg.currencyId };
                     }
                 }
             }
-            if(typeof req.body.currencyId == 'string' && req.body.currencyId != '') {
+            if (typeof req.body.currencyId == 'string' && req.body.currencyId != '') {
                 where.walletCurrencyId = mongoose.Types.ObjectId(req.body.currencyId);
             }
             let sort = { createdDate: -1 }
@@ -333,8 +334,77 @@ const customerWalletController = {
     },
     async getactiveCoinStatus(req, res) {
         try {
-            let currency = await query_helper.findData(Currency, { status: 1 }, { _id: -1, currencySymbol: 1, basecoin: 1, withdrawLevel: 1, siteDecimal: 1, image: 1, curnType: 1, depositEnable: 1, withdrawEnable: 1, tradeEnable: 1, status: 1 }, { _id: -1 }, 0)
-            res.json({ "status": true, "data": currency.msg });
+            Currency.aggregate([
+                {
+                    $match: {
+                        status: 1
+                    }
+                },
+                {
+                    $lookup: {
+                        from: 'Pairs',
+                        let: {
+                            currencyId: '$currencyId',
+                        },
+                        pipeline: [
+                            {
+                                $match: {
+                                  $expr: {
+                                    $and: [
+                                      { "$eq": ["$status", 1] },
+                                      { "$eq": ["$tradeEnable", 1] },
+                                      {
+                                        $or: [
+                                          { "$eq": ["$fromCurrencyId", "$$currencyId"] },
+                                          { "$eq": ["$toCurrencyId", "$$currencyId"] },
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                }
+                            },
+                            {
+                                $limit: 1
+                            },
+                            {
+                                $project: {
+                                    _id: 0,
+                                    pair: 1,
+                                    // fromCurrency: 1,
+                                    // toCurrency: 1,
+                                    // fromCurrencyId: 1,
+                                    // toCurrencyId: 1,
+                                }
+                            }
+                        ],
+                        as: 'pairDet'
+                    },
+                },
+                {
+                    $project: {
+                        _id: 0,
+                        __v: 0,
+                        currencyId: 0,
+                        withdrawLevel: 0,
+                        currencySymbolCode: 0,
+                        apiid: 0,
+                        BTCvalue: 0,
+                        ETHvalue: 0,
+                        USDvalue: 0,
+                        INRvalue: 0,
+                        depositNotes: 0,
+                        withdrawNotes: 0,
+                    }
+                }
+            ]).exec(async function (err, result) {
+                if (result) {
+                    res.json({ "status": true, "data": result });
+                } else {
+                    res.json({ "status": true, "data": [] });
+                }
+            });
+            // let currency = await query_helper.findData(Currency, { status: 1 }, { _id: -1, currencySymbol: 1, basecoin: 1, withdrawLevel: 1, siteDecimal: 1, image: 1, curnType: 1, depositEnable: 1, withdrawEnable: 1, tradeEnable: 1, status: 1 }, { _id: -1 }, 0)
+            // res.json({ "status": true, "data": currency.msg });
         } catch (e) {
             console.log('getCurrency', e);
             res.json({ "status": false, "data": [] });
@@ -673,8 +743,13 @@ const customerWalletController = {
                         currencyResult.USDvalue = currencyResult.currencySymbol == 'USDT' ? 1 : currencyResult.USDvalue;
                         if (currencyResult.status == 1) {
                             let sendAmount = +data.amount;
+
                             if (sendAmount > 0) {
-                                if (currencyResult.transferEnable == 1 || currencyResult.perpetualTransferEnable == 1 || currencyResult.cryptoLoanTransferEnable) {
+                                if (currencyResult.transferEnable == 1 ||
+                                    currencyResult.perpetualTransferEnable == 1 ||
+                                    currencyResult.cryptoLoanTransferEnable == 1 ||
+                                    currencyResult.gamePredictionTransferEnable == 1 ||
+                                    currencyResult.simpleEarnTransferEnable == 1) {
 
                                     const walletFindData = {
                                         userId: mongoose.mongo.ObjectId(userId),
@@ -684,18 +759,17 @@ const customerWalletController = {
                                     let userResult = await query_helper.findoneData(Users, { _id: userId }, {});
                                     if (userResult.status) {
                                         userResult = userResult.msg;
-                                       if(Number.isInteger(sendAmount) == false){
-                                        return retMessage({
-                                            res,
-                                            userId: req.userId,
-                                            retData : { status: false, message: "Please enter the correct value"}
-                                        });
-                                       }
+                                        if (Number.isInteger(sendAmount) == false) {
+                                            return retMessage({
+                                                res,
+                                                userId: req.userId,
+                                                retData: { status: false, message: "Please enter a valid value" }
+                                            });
+                                        }
                                         let walletOutput = await common.getbalance(userId, currencyResult.currencyId);
+                                        if (walletOutput) {
 
-                                        if(walletOutput) {
-
-                                            if(currencyResult.transferEnable != 1 &&
+                                            if (currencyResult.transferEnable != 1 &&
                                                 (
                                                     (data.fromAccount == 'Main Wallet' && data.toAccount == 'P2P Wallet')
                                                     ||
@@ -706,68 +780,110 @@ const customerWalletController = {
                                                 return retMessage({
                                                     res,
                                                     userId: req.userId,
-                                                    retData : { status: false, message: errMessage}
+                                                    retData: { status: false, message: errMessage }
                                                 });
                                             }
-                                            else if(currencyResult.perpetualTransferEnable != 1 &&
+                                            else if (currencyResult.perpetualTransferEnable != 1 &&
                                                 (
                                                     (data.fromAccount == 'Main Wallet' && data.toAccount == 'USD-M Wallet')
                                                     ||
                                                     (data.fromAccount == 'USD-M Wallet' && data.toAccount == 'Main Wallet')
                                                 )
-                                            )
-                                            {
+                                            ) {
                                                 let errMessage = 'USD-M Wallet Transfer Disabled By Admin';
                                                 return retMessage({
                                                     res,
                                                     userId: req.userId,
-                                                    retData : { status: false, message: errMessage}
+                                                    retData: { status: false, message: errMessage }
                                                 });
                                             }
-                                            else if(currencyResult.cryptoLoanTransferEnable != 1 && data.fromAccount == 'Loan Wallet' && data.toAccount == 'Main Wallet') {
+                                            else if (currencyResult.cryptoLoanTransferEnable != 1 && data.fromAccount == 'Loan Wallet' && data.toAccount == 'Main Wallet') {
                                                 let errMessage = 'Loan Wallet Transfer Disabled By Admin';
                                                 return retMessage({
                                                     res,
                                                     userId: req.userId,
-                                                    retData : { status: false, message: errMessage}
+                                                    retData: { status: false, message: errMessage }
                                                 });
                                             }
-
+                                            else if (currencyResult.gamePredictionTransferEnable != 1 &&
+                                                (
+                                                    (data.fromAccount == 'Main Wallet' && data.toAccount == 'Game Wallet')
+                                                    ||
+                                                    (data.fromAccount == 'Game Wallet' && data.toAccount == 'Main Wallet')
+                                                )
+                                            ) {
+                                                let errMessage = 'Game Wallet Transfer Disabled By Admin';
+                                                return retMessage({
+                                                    res,
+                                                    userId: req.userId,
+                                                    retData: { status: false, message: errMessage }
+                                                });
+                                            }
+                                            else if (currencyResult.simpleEarnTransferEnable != 1 &&
+                                                (
+                                                    (data.fromAccount == 'Main Wallet' && data.toAccount == 'Simple Earn Wallet')
+                                                    ||
+                                                    (data.fromAccount == 'Simple Earn Wallet' && data.toAccount == 'Main Wallet')
+                                                )
+                                            ) {
+                                                let errMessage = 'Simple Earn Wallet Transfer Disabled By Admin';
+                                                return retMessage({
+                                                    res,
+                                                    userId: req.userId,
+                                                    retData: { status: false, message: errMessage }
+                                                });
+                                            }
                                             let curFromBalance = 0;
                                             let curToBalance = 0;
-                                            if(data.fromAccount == 'Main Wallet' && data.toAccount == 'P2P Wallet') {
+                                            if (data.fromAccount == 'Main Wallet' && data.toAccount == 'P2P Wallet') {
                                                 curFromBalance = walletOutput.amount;
                                                 curToBalance = walletOutput.p2pAmount;
                                             }
-                                            else if(data.fromAccount == 'P2P Wallet' && data.toAccount == 'Main Wallet') {
+                                            else if (data.fromAccount == 'P2P Wallet' && data.toAccount == 'Main Wallet') {
                                                 curFromBalance = walletOutput.p2pAmount;
                                                 curToBalance = walletOutput.amount;
                                             }
-                                            else if(data.fromAccount == 'Main Wallet' && data.toAccount == 'USD-M Wallet') {
+                                            else if (data.fromAccount == 'Main Wallet' && data.toAccount == 'USD-M Wallet') {
                                                 curFromBalance = walletOutput.amount;
                                                 curToBalance = walletOutput.perpetualAmount;
                                             }
-                                            else if(data.fromAccount == 'USD-M Wallet' && data.toAccount == 'Main Wallet') {
+                                            else if (data.fromAccount == 'USD-M Wallet' && data.toAccount == 'Main Wallet') {
                                                 curFromBalance = walletOutput.perpetualAmount;
                                                 curToBalance = walletOutput.amount;
                                             }
-                                            else if(data.fromAccount == 'Loan Wallet' && data.toAccount == 'Main Wallet') {
+                                            else if (data.fromAccount == 'Loan Wallet' && data.toAccount == 'Main Wallet') {
                                                 curFromBalance = walletOutput.cryptoLoanAmount;
                                                 curToBalance = walletOutput.amount;
                                             }
 
+                                            else if (data.fromAccount == 'Main Wallet' && data.toAccount == 'Game Wallet') {
+                                                curFromBalance = walletOutput.amount;
+                                                curToBalance = walletOutput.gamePredictionAmount;
+                                            }
+                                            else if (data.fromAccount == 'Game Wallet' && data.toAccount == 'Main Wallet') {
+                                                curFromBalance = walletOutput.gamePredictionAmount;
+                                                curToBalance = walletOutput.amount;
+                                            }
+                                            else if (data.fromAccount == 'Main Wallet' && data.toAccount == 'Simple Earn Wallet') {
+                                                curFromBalance = walletOutput.amount;
+                                                curToBalance = walletOutput.simpleEarnAmount;
+                                            }
+                                            else if(data.fromAccount == 'Simple Earn Wallet' && data.toAccount == 'Main Wallet') {
+                                                curFromBalance = walletOutput.simpleEarnAmount;
+                                                curToBalance = walletOutput.amount;
+                                            }
                                             if (curFromBalance < sendAmount) {
                                                 return retMessage({
                                                     res,
                                                     userId: req.userId,
-                                                    retData : { status: false, message: "Insufficient balance" }
+                                                    retData: { status: false, message: "Insufficient balance" }
                                                 });
                                             }
                                             else if (currencyResult.minWalletTransfer > sendAmount) {
                                                 return retMessage({
                                                     res,
                                                     userId: req.userId,
-                                                    retData : { status: false, message: "Minimum amount to transfer is "+ (currencyResult.minWalletTransfer) + " "+ currencyResult.currencySymbol }
+                                                    retData: { status: false, message: "Minimum amount to transfer is " + (currencyResult.minWalletTransfer) + " " + currencyResult.currencySymbol }
                                                 });
                                             }
                                             else {
@@ -794,10 +910,10 @@ const customerWalletController = {
                                                         userId: mongoose.mongo.ObjectId(userId),
                                                         currencyId: mongoose.mongo.ObjectId(currencyResult.currencyId),
                                                         lastId: lastId,
-                                                        type: 'From '+data.fromAccount+" To "+data.toAccount,
+                                                        type: 'From ' + data.fromAccount + " To " + data.toAccount,
                                                         notes: "from",
                                                         difference: common.roundValues(-sendAmount, currencyResult.decimal),
-                                                        oldBalance : common.roundValues(curFromBalance, currencyResult.decimal),
+                                                        oldBalance: common.roundValues(curFromBalance, currencyResult.decimal),
                                                     };
 
                                                     let toBalUpdTable;
@@ -805,18 +921,17 @@ const customerWalletController = {
                                                         userId: mongoose.mongo.ObjectId(userId),
                                                         currencyId: mongoose.mongo.ObjectId(currencyResult.currencyId),
                                                         lastId: lastId,
-                                                        type: 'From '+data.fromAccount+" To "+data.toAccount,
+                                                        type: 'From ' + data.fromAccount + " To " + data.toAccount,
                                                         notes: "to",
                                                         difference: common.roundValues(+sendAmount, currencyResult.decimal),
-                                                        oldBalance : common.roundValues(curToBalance, currencyResult.decimal),
+                                                        oldBalance: common.roundValues(curToBalance, currencyResult.decimal),
                                                     };
 
                                                     let updData = {};
 
                                                     let fromAmountField = "";
                                                     let toAmountField = "";
-
-                                                    if(data.fromAccount == 'Main Wallet' && data.toAccount == 'P2P Wallet') {
+                                                    if (data.fromAccount == 'Main Wallet' && data.toAccount == 'P2P Wallet') {
                                                         fromBalUpdTable = BalanceUpdation;
                                                         toBalUpdTable = P2PBalanceUpdation;
 
@@ -830,10 +945,10 @@ const customerWalletController = {
                                                             }
                                                         };
                                                     }
-                                                    else if(data.fromAccount == 'P2P Wallet' && data.toAccount == 'Main Wallet') {
+                                                    else if (data.fromAccount == 'P2P Wallet' && data.toAccount == 'Main Wallet') {
                                                         fromBalUpdTable = P2PBalanceUpdation;
                                                         toBalUpdTable = BalanceUpdation;
-                                                        
+
                                                         fromAmountField = "p2pAmount";
                                                         toAmountField = "amount";
 
@@ -844,7 +959,7 @@ const customerWalletController = {
                                                             }
                                                         };
                                                     }
-                                                    else if(data.fromAccount == 'Main Wallet' && data.toAccount == 'USD-M Wallet') {
+                                                    else if (data.fromAccount == 'Main Wallet' && data.toAccount == 'USD-M Wallet') {
                                                         fromBalUpdTable = BalanceUpdation;
                                                         toBalUpdTable = USDMBalanceUpdation;
 
@@ -858,7 +973,7 @@ const customerWalletController = {
                                                             }
                                                         };
                                                     }
-                                                    else if(data.fromAccount == 'USD-M Wallet' && data.toAccount == 'Main Wallet') {
+                                                    else if (data.fromAccount == 'USD-M Wallet' && data.toAccount == 'Main Wallet') {
                                                         fromBalUpdTable = USDMBalanceUpdation;
                                                         toBalUpdTable = BalanceUpdation;
 
@@ -872,10 +987,10 @@ const customerWalletController = {
                                                             }
                                                         };
                                                     }
-                                                    else if(data.fromAccount == 'Loan Wallet' && data.toAccount == 'Main Wallet') {
+                                                    else if (data.fromAccount == 'Loan Wallet' && data.toAccount == 'Main Wallet') {
                                                         fromBalUpdTable = CryptoLoanBalanceUpdation;
                                                         toBalUpdTable = BalanceUpdation;
-                                                        
+
                                                         fromAmountField = "cryptoLoanAmount";
                                                         toAmountField = "amount";
 
@@ -886,13 +1001,69 @@ const customerWalletController = {
                                                             }
                                                         };
                                                     }
+                                                    else if (data.fromAccount == 'Main Wallet' && data.toAccount == 'Game Wallet') {
+                                                        fromBalUpdTable = BalanceUpdation;
+                                                        toBalUpdTable = GamePredictionBalanceUpdation;
 
+                                                        fromAmountField = "amount";
+                                                        toAmountField = "gamePredictionAmount";
+
+                                                        updData = {
+                                                            "$inc": {
+                                                                'amount': -sendAmount,
+                                                                'gamePredictionAmount': sendAmount
+                                                            }
+                                                        };
+                                                    }
+                                                    else if (data.fromAccount == 'Game Wallet' && data.toAccount == 'Main Wallet') {
+                                                        fromBalUpdTable = GamePredictionBalanceUpdation;
+                                                        toBalUpdTable = BalanceUpdation;
+
+                                                        fromAmountField = "gamePredictionAmount";
+                                                        toAmountField = "amount";
+
+                                                        updData = {
+                                                            "$inc": {
+                                                                'gamePredictionAmount': -sendAmount,
+                                                                'amount': sendAmount
+                                                            }
+                                                        };
+                                                    }
+                                                    
+                                                    else if (data.fromAccount == 'Main Wallet' && data.toAccount == 'Simple Earn Wallet') {
+                                                        fromBalUpdTable = BalanceUpdation;
+                                                        toBalUpdTable = SimpleEarnBalanceUpdation;
+
+                                                        fromAmountField = "amount";
+                                                        toAmountField = "simpleEarnAmount";
+
+                                                        updData = {
+                                                            "$inc": {
+                                                                'amount': -sendAmount,
+                                                                'simpleEarnAmount': sendAmount
+                                                            }
+                                                        };
+                                                    }
+                                                    else if (data.fromAccount == 'Simple Earn Wallet' && data.toAccount == 'Main Wallet') {
+                                                        fromBalUpdTable = SimpleEarnBalanceUpdation;
+                                                        toBalUpdTable = BalanceUpdation;
+
+                                                        fromAmountField = "simpleEarnAmount";
+                                                        toAmountField = "amount";
+
+                                                        updData = {
+                                                            "$inc": {
+                                                                'simpleEarnAmount': -sendAmount,
+                                                                'amount': sendAmount
+                                                            }
+                                                        };
+                                                    }
                                                     const fromBalUpdationId = await query_helper.insertData(fromBalUpdTable, fromBalUpdation);
                                                     const toBalUpdationId = await query_helper.insertData(toBalUpdTable, toBalUpdation);
 
                                                     let updateBalance = {};
 
-                                                    if(fromBalUpdationId.status && toBalUpdationId.status) {
+                                                    if (fromBalUpdationId.status && toBalUpdationId.status) {
                                                         const options = { new: true };
                                                         updateBalance = await UserWallet.findOneAndUpdate(walletFindData, updData, options);
                                                     }
@@ -902,31 +1073,31 @@ const customerWalletController = {
                                                         await fromBalUpdTable.findOneAndUpdate({
                                                             _id: fromBalUpdationId.msg._id
                                                         }, {
-                                                            amount : updateBalance[fromAmountField]
+                                                            amount: updateBalance[fromAmountField]
                                                         });
                                                         await toBalUpdTable.findOneAndUpdate({
                                                             _id: toBalUpdationId.msg._id
                                                         }, {
-                                                            amount : updateBalance[toAmountField]
+                                                            amount: updateBalance[toAmountField]
                                                         });
 
                                                         let configResult = await query_helper.findoneData(emailTemplate, { hint: 'user-transfer' }, {})
                                                         if (configResult.status) {
                                                             configResult = configResult.msg;
                                                             let emailtemplate = configResult.content.replace(/###NAME###/g, userResult.username).replace(/###CURRENCY###/g, currencyResult.currencySymbol).replace(/###AMOUNT###/g, common.roundValuesMail(+data.amount, 8));
-                                                            mail_helper.sendMail({ subject: configResult.subject+" - "+data.fromAccount+" To "+data.toAccount, to: userResult.email, html: emailtemplate }, (aftermail) => {
+                                                            mail_helper.sendMail({ subject: configResult.subject + " - " + data.fromAccount + " To " + data.toAccount, to: userResult.email, html: emailtemplate }, (aftermail) => {
                                                             });
                                                         }
                                                         return retMessage({
                                                             res,
                                                             userId: req.userId,
-                                                            retData : { status: true, message: "Amount transferred successfully!"}
+                                                            retData: { status: true, message: "Amount transferred successfully!" }
                                                         });
                                                     } else {
                                                         return retMessage({
                                                             res,
                                                             userId: req.userId,
-                                                            retData : { status: false, message: "Oops! Something went wrong. Please try again!"}
+                                                            retData: { status: false, message: "Oops! Something went wrong. Please try again!" }
                                                         });
                                                     }
                                                 }
@@ -934,7 +1105,7 @@ const customerWalletController = {
                                                     return retMessage({
                                                         res,
                                                         userId: req.userId,
-                                                        retData : { status: false, message: "Wallet transferred failed. Please try again"}
+                                                        retData: { status: false, message: "Wallet transferred failed. Please try again" }
                                                     });
                                                 }
                                             }
@@ -942,14 +1113,14 @@ const customerWalletController = {
                                             return retMessage({
                                                 res,
                                                 userId: req.userId,
-                                                retData : { status: false, message: "Oops! Something went wrong. Please try again"}
+                                                retData: { status: false, message: "Oops! Something went wrong. Please try again" }
                                             });
                                         }
                                     } else {
                                         return retMessage({
                                             res,
                                             userId: req.userId,
-                                            retData : { status: false, message: "Invalid user."}
+                                            retData: { status: false, message: "Invalid user." }
                                         });
                                     }
                                 }
@@ -957,32 +1128,32 @@ const customerWalletController = {
                                     return retMessage({
                                         res,
                                         userId: req.userId,
-                                        retData : { status: false, message: "Transfer for this currency is disabled"}
+                                        retData: { status: false, message: "Transfer for this currency is disabled" }
                                     });
                                 }
                             } else {
                                 return retMessage({
                                     res,
                                     userId: req.userId,
-                                    retData : { status: false, message: "Please enter valid amount"}
+                                    retData: { status: false, message: "Please enter valid amount" }
                                 });
                             }
                         } else {
                             return retMessage({
                                 res,
                                 userId: req.userId,
-                                retData : { status: false, message: "Currency status is not in active state"}
+                                retData: { status: false, message: "Currency status is not in active state" }
                             });
                         }
                     } else {
                         return retMessage({
                             res,
                             userId: req.userId,
-                            retData : { status: false, message: "Not a valid currency" }
+                            retData: { status: false, message: "Not a valid currency" }
                         });
                     }
                 } else {
-                    console.log({oArray})
+                    console.log({ oArray })
                     return res.json({ status: false, message: "Please wait your previous request has not been completed!" });
                 }
             } else {
@@ -993,9 +1164,9 @@ const customerWalletController = {
             return retMessage({
                 res,
                 userId: req.userId,
-                retData : { "status": false, "message": "Something went wrong" }
+                retData: { "status": false, "message": "Something went wrong" }
             });
-        }            
+        }
     },
     async submitTransferOld(req, res) {
         try {
@@ -1035,7 +1206,7 @@ const customerWalletController = {
                                                     return res.json({ status: false, message: "Insufficient balance" })
                                                 } else {
                                                     if (currencyResult.minWalletTransfer > data.amount) {
-                                                        return res.json({ status: false, message: "Minimum amount to transfer is "+ (currencyResult.minWalletTransfer) + " "+ currencyResult.currencySymbol })
+                                                        return res.json({ status: false, message: "Minimum amount to transfer is " + (currencyResult.minWalletTransfer) + " " + currencyResult.currencySymbol })
                                                     }
                                                     let sendAmount = +data.amount;
                                                     let values = {
@@ -1052,15 +1223,15 @@ const customerWalletController = {
                                                     let insertedOutput = await query_helper.insertData(Transactions, values)
                                                     if (insertedOutput.status) {
                                                         insertedOutput = insertedOutput.msg
-                                                        common.userNotification(userId, 'Wallet Transfer', 'You have Transferred '+sendAmount+' '+currencyResult.currencySymbol+ ' From '+data.fromAccount+" To "+data.toAccount);
+                                                        common.userNotification(userId, 'Wallet Transfer', 'You have Transferred ' + sendAmount + ' ' + currencyResult.currencySymbol + ' From ' + data.fromAccount + " To " + data.toAccount);
                                                         let activity = common.activity(req);
-                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
+                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : '';
                                                         common.userNotify({
                                                             userId: req.userId,
                                                             reason: 'Wallet Transfer',
                                                             activity,
                                                             detail: {
-                                                                transferId : insertedOutput._id,
+                                                                transferId: insertedOutput._id,
                                                                 amount: sendAmount,
                                                                 currencySymbol: currencyResult.currencySymbol,
                                                                 fromAccount: data.fromAccount,
@@ -1068,21 +1239,21 @@ const customerWalletController = {
                                                             }
                                                         });
                                                         let newbal = 0;
-                                                        if(fromType == 'amount') {
+                                                        if (fromType == 'amount') {
                                                             newbal = (+walletOutput.amount) - (+data.amount)
                                                             newp2pbal = (+walletOutput.p2pAmount) + (+data.amount)
                                                         } else {
                                                             newbal = (+walletOutput.amount) + (+data.amount)
                                                             newp2pbal = (+walletOutput.p2pAmount) - (+data.amount)
                                                         }
-                                                        await common.updatep2pAmount(userId, currencyResult.currencyId, +newp2pbal,insertedOutput._id,' From '+data.fromAccount+" To "+data.toAccount);
-                                                        let updateBalance = await common.updateUserBalance(userId, currencyResult.currencyId, newbal, insertedOutput._id, data.fromAccount+" To "+data.toAccount);
+                                                        await common.updatep2pAmount(userId, currencyResult.currencyId, +newp2pbal, insertedOutput._id, ' From ' + data.fromAccount + " To " + data.toAccount);
+                                                        let updateBalance = await common.updateUserBalance(userId, currencyResult.currencyId, newbal, insertedOutput._id, data.fromAccount + " To " + data.toAccount);
                                                         let configResult = await query_helper.findoneData(emailTemplate, { hint: 'user-transfer' }, {})
                                                         if (updateBalance) {
                                                             if (configResult.status) {
                                                                 configResult = configResult.msg;
                                                                 let emailtemplate = configResult.content.replace(/###NAME###/g, userResult.username).replace(/###CURRENCY###/g, currencyResult.currencySymbol).replace(/###AMOUNT###/g, common.roundValuesMail(+data.amount, 8));
-                                                                mail_helper.sendMail({ subject: configResult.subject+" - "+data.fromAccount+" To "+data.toAccount, to: userResult.email, html: emailtemplate }, (aftermail) => {
+                                                                mail_helper.sendMail({ subject: configResult.subject + " - " + data.fromAccount + " To " + data.toAccount, to: userResult.email, html: emailtemplate }, (aftermail) => {
                                                                 })
                                                             }
                                                             return res.json({ status: true, message: "Amount transferred successfully!" })
@@ -1136,10 +1307,10 @@ const customerWalletController = {
                                                     }
                                                     let insertedOutput = await query_helper.insertData(Transactions, values)
                                                     if (insertedOutput.status) {
-                                                        common.userNotification(userId, 'Wallet Transfer', 'You have Transferred '+sendAmount+' '+currencyResult.currencySymbol+ ' From '+data.fromAccount+" To "+data.toAccount);
+                                                        common.userNotification(userId, 'Wallet Transfer', 'You have Transferred ' + sendAmount + ' ' + currencyResult.currencySymbol + ' From ' + data.fromAccount + " To " + data.toAccount);
                                                         insertedOutput = insertedOutput.msg
                                                         let activity = common.activity(req);
-                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
+                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : '';
                                                         let userActData = await query_helper.findoneData(activityDB, { userId: req.userId, ip: activity.ip, type: "Wallet Transfer" }, {})
                                                         if (!userActData.status) {
                                                             common.userNotify({
@@ -1147,7 +1318,7 @@ const customerWalletController = {
                                                                 reason: 'Wallet Transfer',
                                                                 activity,
                                                                 detail: {
-                                                                    transferId : insertedOutput._id,
+                                                                    transferId: insertedOutput._id,
                                                                     amount: sendAmount,
                                                                     currencySymbol: currencyResult.currencySymbol,
                                                                     fromAccount: data.fromAccount,
@@ -1156,21 +1327,21 @@ const customerWalletController = {
                                                             });
                                                         }
                                                         let newbal = 0;
-                                                        if(fromType == 'amount') {
+                                                        if (fromType == 'amount') {
                                                             newbal = (+walletOutput.amount) - (+data.amount)
                                                             newp2pbal = (+walletOutput.perpetualAmount) + (+data.amount)
                                                         } else {
                                                             newbal = (+walletOutput.amount) + (+data.amount)
                                                             newp2pbal = (+walletOutput.perpetualAmount) - (+data.amount)
                                                         }
-                                                        await common.updateperpetualAmount(userId, currencyResult.currencyId, +newp2pbal,insertedOutput._id,' From '+data.fromAccount+" To "+data.toAccount);
-                                                        let updateBalance = await common.updateUserBalance(userId, currencyResult.currencyId, newbal, insertedOutput._id, data.fromAccount+" To "+data.toAccount);
+                                                        await common.updateperpetualAmount(userId, currencyResult.currencyId, +newp2pbal, insertedOutput._id, ' From ' + data.fromAccount + " To " + data.toAccount);
+                                                        let updateBalance = await common.updateUserBalance(userId, currencyResult.currencyId, newbal, insertedOutput._id, data.fromAccount + " To " + data.toAccount);
                                                         let configResult = await query_helper.findoneData(emailTemplate, { hint: 'user-transfer' }, {})
                                                         if (updateBalance) {
                                                             if (configResult.status) {
                                                                 configResult = configResult.msg;
                                                                 let emailtemplate = configResult.content.replace(/###NAME###/g, userResult.username).replace(/###CURRENCY###/g, currencyResult.currencySymbol).replace(/###AMOUNT###/g, common.roundValuesMail(+data.amount, 8));
-                                                                mail_helper.sendMail({ subject: configResult.subject+" - "+data.fromAccount+" To "+data.toAccount, to: userResult.email, html: emailtemplate }, (aftermail) => {
+                                                                mail_helper.sendMail({ subject: configResult.subject + " - " + data.fromAccount + " To " + data.toAccount, to: userResult.email, html: emailtemplate }, (aftermail) => {
                                                                 })
                                                             }
                                                             return res.json({ status: true, message: "Amount transferred successfully!" })
@@ -1198,7 +1369,6 @@ const customerWalletController = {
                                         if (userResult.status) {
                                             userResult = userResult.msg;
                                             let walletOutput = await common.getbalance(userId, currencyResult.currencyId); //** user wallet details fetch */
-                                            // console.log("walletOutput=============", walletOutput);
                                             if (walletOutput) {
                                                 let fromType = '', toType = '';
                                                 if (data.fromAccount == 'Loan Wallet') {
@@ -1225,7 +1395,7 @@ const customerWalletController = {
                                                         common.userNotification(userId, 'Wallet Transfer', 'You have Transferred ' + sendAmount + ' ' + currencyResult.currencySymbol + ' From ' + data.fromAccount + " To " + data.toAccount);
                                                         //** loan notification functions */
                                                         let activity = common.activity(req);
-                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
+                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : '';
                                                         let userActData = await query_helper.findoneData(activityDB, { userId: req.userId, ip: activity.ip, type: "Wallet Transfer" }, {})
                                                         if (!userActData.status) {
                                                             common.userNotify({
@@ -1243,7 +1413,6 @@ const customerWalletController = {
                                                         }
                                                         insertedOutput = insertedOutput.msg
                                                         let newbal = 0;
-                                                        // console.log("walletOutput=============", +walletOutput);
                                                         if (fromType == 'amount') {
                                                             newbal = (+walletOutput.amount) - (+data.amount);
                                                             newLoanBal = (+walletOutput.cryptoLoanAmount) + (+data.amount)
@@ -1446,9 +1615,9 @@ const customerWalletController = {
                                                                 resdata = resdata.msg;
                                                                 const curVolume = data.amount * currencyResult.USDvalue;
                                                                 const totalDailyVolume1 = totalDailyVolume + curVolume;
-                                                                const limit = (typeof resdata.withdrawLevel == 'object' && typeof resdata.withdrawLevel['level'+userResult.level] == 'object') ? resdata.withdrawLevel['level'+userResult.level] : {dailyVolume: 0, monthlyVolume:0};
+                                                                const limit = (typeof resdata.withdrawLevel == 'object' && typeof resdata.withdrawLevel['level' + userResult.level] == 'object') ? resdata.withdrawLevel['level' + userResult.level] : { dailyVolume: 0, monthlyVolume: 0 };
                                                                 // if(totalDailyVolume1 <= 100000000000) {}
-                                                                if(totalDailyVolume1 <= limit.dailyVolume || limit.dailyVolume == 0) {
+                                                                if (totalDailyVolume1 <= limit.dailyVolume || limit.dailyVolume == 0) {
                                                                     const totalMonthlyVolume1 = totalMonthlyVolume + curVolume;
                                                                     if (totalMonthlyVolume1 <= limit.monthlyVolume || limit.monthlyVolume == 0) {
                                                                         let walletOutput = await common.getbalance(userId, currencyResult.currencyId)
@@ -1510,10 +1679,10 @@ const customerWalletController = {
                                                                                                     if (insertedOutput.status) {
                                                                                                         insertedOutput = insertedOutput.msg
                                                                                                         let activity = common.activity(req);
-                                                                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
+                                                                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : '';
                                                                                                         let userActData = await query_helper.findoneData(activityDB, { userId: req.userId, ip: activity.ip, type: "Login" }, {})
                                                                                                         if (!userActData.status) {
-                                                                                                            common.userNotification(userId, 'Withdraw Requested', 'You have Requested Withdraw '+(+data.amount)+' '+currencyResult.currencySymbol+ '. Address: '+(typeof data.address == 'string' ? data.address : ''));
+                                                                                                            common.userNotification(userId, 'Withdraw Requested', 'You have Requested Withdraw ' + (+data.amount) + ' ' + currencyResult.currencySymbol + '. Address: ' + (typeof data.address == 'string' ? data.address : ''));
                                                                                                             common.userNotify({
                                                                                                                 userId: req.userId,
                                                                                                                 reason: 'Withdraw Requested',
@@ -1651,7 +1820,11 @@ const customerWalletController = {
     async processWithdrawal() {
         try {
             if (common.getSiteDeploy() == 0) {
-                let transresult = await Transactions.find({ status: 5, adminVerify: 'verified' }).sort({ _id: 1 }).populate("userId", "username email").populate("currencyId", "currencyName currencySymbol decimal curnType cointype basecoin currencyId contractAddress");
+                let transresult = await Transactions.find({ status: 5, adminVerify: 'verified' })
+                .sort({ _id: 1 })
+                .limit(3)
+                .populate("userId", "username email")
+                .populate("currencyId", "currencyName currencySymbol decimal curnType cointype basecoin currencyId contractAddress");
                 if (transresult && transresult.length > 0) {
                     let allOrders = [];
                     transresult.forEach(element => {
@@ -1742,7 +1915,7 @@ const customerWalletController = {
                                                         }
                                                         let txnIns = await query_helper.insertData(Transactions, objInsert);
                                                         let activity = common.activity(req);
-                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : loginType + ' Application';
+                                                        activity.browser = (typeof activity.browser == 'string') ? activity.browser : '';
                                                         let userActData = await query_helper.findoneData(activityDB, { userId: req.userId, ip: activity.ip, type: "Deposit Fiat" }, {})
                                                         if (!userActData.status) {
                                                             common.userNotify({

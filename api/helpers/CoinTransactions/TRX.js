@@ -600,7 +600,6 @@ exports.AdminMoveProcess = function () {
                     as: 'currency'
                     }
                 },
-                { $limit: 3 },
                 { "$unwind": "$currency" },
                 {
                     "$group": {
@@ -611,7 +610,8 @@ exports.AdminMoveProcess = function () {
                         "address": { "$first": "$address" },
                         "currency" : { "$first": "$currency" }
                     }
-                }
+                },
+                { $limit: 3 }
             ]).exec(function (err, resData) {
                 if(resData.length > 0){
                     for (let i = 0; i < resData.length; i++) {
@@ -688,7 +688,7 @@ exports.AdminTokenMoveProcess = function () {
                     }
                 },
                 { "$sort": { "amount": -1 } },
-                { "$limit": 3 }
+                { $limit: 3 }
             ]).exec(function (err, resData) {
                 if(resData.length > 0){
                     for (let i = 0; i < resData.length; i++) {

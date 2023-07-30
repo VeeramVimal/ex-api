@@ -6,7 +6,7 @@ const DerivativesPairDB = mongoose.model("DerivativesPairs");
 let OrderBookDB = mongoose.model('OrderBook');
 
 const commonHelper = require('../../helpers/common');
-const cronFile = require('../../cron/cron.liq');
+// const cronFile = require('../../cron/cron.liq');
 const { cat } = require('shelljs');
 
 const pairsController = {
@@ -58,7 +58,9 @@ const pairsController = {
         let fromCurrency = await query_helper.findoneData(Currency,{_id: mongoose.Types.ObjectId(data.fromCurrency)},{});
         let toCurrency = await query_helper.findoneData(Currency,{_id: mongoose.Types.ObjectId(data.toCurrency)},{});
         if(fromCurrency.status && toCurrency.status) {
-            data.pair = fromCurrency.msg.currencySymbol+'_'+toCurrency.msg.currencySymbol
+            data.fromCurrencyId = fromCurrency.msg.currencyId;
+            data.toCurrencyId = toCurrency.msg.currencyId;
+            data.pair = fromCurrency.msg.currencySymbol+'_'+toCurrency.msg.currencySymbol;
             let getPairs = await query_helper.findoneData(Pairs,{fromCurrency: mongoose.Types.ObjectId(data.fromCurrency), toCurrency: mongoose.Types.ObjectId(data.toCurrency), exchangeType : "SPOT"},{})
             if(!getPairs.status) {
                 if(data.autoOrderExecute == 1 || data.autoOrderExecute == "1") {
@@ -69,7 +71,7 @@ const pairsController = {
                 if(pairs.msg && pairs.msg._id) {
                     data._id = pairs.msg._id
                 }
-                cronFile.unAvailablePairsUpdate(data, {from: "spot", action: "add"});
+                // cronFile.unAvailablePairsUpdate(data, {from: "spot", action: "add"});
                 if(pairs.status) {
                     await commonHelper.adminactivtylog(req, 'Pair Added', req.userId, mongoose.Types.ObjectId(data._id), 'New Pair', 'New Pair Added Successfully');
                     res.json({ "status": pairs.status, "message": 'Pair Added Successfully!' });
@@ -96,17 +98,25 @@ const pairsController = {
             {}
         );
         if(!getPairs.status) {
-            
+
             let getPairs = await query_helper.findoneData(
                 Pairs,
                 {
                     fromCurrency: mongoose.Types.ObjectId(data.fromCurrency),
                     toCurrency: mongoose.Types.ObjectId(data.toCurrency),
+                    exchangeType : "SPOT",
                     _id: mongoose.Types.ObjectId(data._id)
                 },
                 {}
             );
             if(getPairs.status) {
+                let fromCurrency = await query_helper.findoneData(Currency,{_id: mongoose.Types.ObjectId(data.fromCurrency)},{});
+                let toCurrency = await query_helper.findoneData(Currency,{_id: mongoose.Types.ObjectId(data.toCurrency)},{});
+                if(fromCurrency.status && toCurrency.status) {
+                    data.pair = fromCurrency.msg.currencySymbol+'_'+toCurrency.msg.currencySymbol;
+                    data.fromCurrencyId = fromCurrency.msg.currencyId;
+                    data.toCurrencyId = toCurrency.msg.currencyId;
+                }
                 delete data.fromCurrency;
                 delete data.toCurrency;
 
@@ -118,9 +128,10 @@ const pairsController = {
                 let pairs = await query_helper.updateData(Pairs,"one",{
                     _id:mongoose.Types.ObjectId(data._id)
                 }, data, {new: true});
+
                 if(pairs.status) {
                     getPairs.msg.autoOrderExecute = data.autoOrderExecute;
-                    cronFile.unAvailablePairsUpdate(getPairs.msg, {from: "spot", action: "update"});
+                    // cronFile.unAvailablePairsUpdate(getPairs.msg, {from: "spot", action: "update"});
                     await commonHelper.adminactivtylog(req, 'Pair Updated', req.userId, mongoose.Types.ObjectId(data._id), 'Pair Updated', ' Pair Updated Successfully');
                     res.json({ "status": pairs.status, "message": 'Pair Updated Successfully!' });
                 } else {
